@@ -80,21 +80,36 @@ export default function AdminUsersPage() {
     }
     
     // Insert into approved_emails
-    const { error } = await supabase.from('approved_emails').insert({
-      email: email.toLowerCase(),
-      full_name: fullName || null,
-      role: role || 'viewer',
-    })
-    
-    if (error) {
-      alert('Error: ' + error.message)
+    try {
+      const { error } = await supabase.from('approved_emails').insert({
+        email: email.toLowerCase(),
+        full_name: fullName || null,
+        role: role || 'viewer',
+      })
+
+      if (error) {
+        // Supabase responded with an error (RLS denial, constraint, etc.)
+        alert(`Could not add user: ${error.message}${error.code ? ` [${error.code}]` : ''}`)
+        return
+      }
+
+      setShowAddModal(false)
+      fetchPreApproved()
+    } catch (err) {
+      // Thrown before a response — network blocked / request never completed.
+      const msg = err instanceof Error ? err.message : String(err)
+      if (/load failed|failed to fetch|networkerror/i.test(msg)) {
+        alert(
+          'Could not add user — the request did not complete (network/permission). ' +
+          'This usually means the approved_emails table is missing an INSERT policy in Supabase. ' +
+          `Details: ${msg}`
+        )
+      } else {
+        alert(`Unexpected error adding user: ${msg}`)
+      }
+    } finally {
       setAddLoading(false)
-      return
     }
-    
-    setShowAddModal(false)
-    setAddLoading(false)
-    fetchPreApproved()
   }
 
   const removePreApproved = async (email: string) => {
