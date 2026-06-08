@@ -26,6 +26,7 @@ import {
   Headset,
   Briefcase,
   ClipboardCheck,
+  Megaphone,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useReportIssue } from '@/components/ReportIssue'
@@ -51,6 +52,7 @@ const navItems = [
   { href: '/calendar', label: 'Calendar', icon: Calendar },
   { href: '/tickets', label: 'Tickets', icon: Headset },
   { href: '/reports', label: 'Reports', icon: BarChart2 },
+  { href: '/marketing', label: 'Marketing', icon: Megaphone },
 ]
 
 const adminItems = [
