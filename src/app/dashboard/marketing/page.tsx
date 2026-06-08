@@ -44,29 +44,31 @@ export default function MarketingPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const ch = await supabase.from('marketing_channels').select('*').order('priority')
-    if (ch.error) {
-      // table missing → setup not yet run
-      if (/relation|does not exist|schema cache|find the table/i.test(ch.error.message)) {
+    try {
+      const ch = await supabase.from('marketing_channels').select('*').order('priority')
+      // Any error here means the tables aren't set up yet → show the setup panel.
+      if (ch.error) {
         setSetupNeeded(true)
-        setLoading(false)
         return
       }
+      setChannels((ch.data as Channel[]) || [])
+      const tk = await supabase.from('marketing_tasks').select('*').order('created_at', { ascending: false })
+      setTasks((tk.data as Task[]) || [])
+      const q = await supabase.from('quotes').select('status')
+      if (!q.error && q.data) {
+        const rows = q.data as { status: string }[]
+        const norm = (s: string) => (s || '').toLowerCase()
+        setQuoteStats({
+          total: rows.length,
+          sent: rows.filter(r => norm(r.status) === 'sent').length,
+          accepted: rows.filter(r => norm(r.status) === 'accepted' || norm(r.status) === 'approved').length,
+        })
+      }
+    } catch {
+      setSetupNeeded(true)
+    } finally {
+      setLoading(false)
     }
-    setChannels((ch.data as Channel[]) || [])
-    const tk = await supabase.from('marketing_tasks').select('*').order('created_at', { ascending: false })
-    setTasks((tk.data as Task[]) || [])
-    const q = await supabase.from('quotes').select('status')
-    if (!q.error && q.data) {
-      const rows = q.data as { status: string }[]
-      const norm = (s: string) => (s || '').toLowerCase()
-      setQuoteStats({
-        total: rows.length,
-        sent: rows.filter(r => norm(r.status) === 'sent').length,
-        accepted: rows.filter(r => norm(r.status) === 'accepted' || norm(r.status) === 'approved').length,
-      })
-    }
-    setLoading(false)
   }, [supabase])
 
   useEffect(() => { load() }, [load])
