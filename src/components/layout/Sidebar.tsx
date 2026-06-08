@@ -39,6 +39,7 @@ const navItems = [
   { href: '/clients', label: 'Clients', icon: Users },
   { href: '/pipeline', label: 'Pipeline', icon: GitBranch },
   { href: '/quotes', label: 'Quotes', icon: FileText },
+  { href: '/calculator', label: 'Calculator', icon: Calculator },
   { href: '/orders', label: 'Orders', icon: Package },
   { href: '/purchase-orders', label: 'Purchase Orders', icon: ClipboardList },
   { href: '/invoices', label: 'Invoices', icon: Receipt },
