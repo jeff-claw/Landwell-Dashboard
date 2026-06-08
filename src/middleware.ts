@@ -41,9 +41,10 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   // Redirect unauthenticated users to login (except auth pages and certain API routes)
-  const isPublicApi = request.nextUrl.pathname.startsWith('/api/migrate') || 
+  const isPublicApi = request.nextUrl.pathname.startsWith('/api/migrate') ||
                       request.nextUrl.pathname.startsWith('/api/upload-image') ||
-                      request.nextUrl.pathname.startsWith('/api/exchange-rate')
+                      request.nextUrl.pathname.startsWith('/api/exchange-rate') ||
+                      request.nextUrl.pathname.startsWith('/api/create-profile')
   if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/signup') && !isPublicApi) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
