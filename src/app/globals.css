@@ -14,12 +14,10 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* App is light-themed only (white cards, slate borders throughout).
+   The stock Next.js dark-mode override flipped inherited text to near-white,
+   making un-coded text invisible on white backgrounds when the OS is in dark
+   mode. Removed so foreground stays dark regardless of OS theme. */
 
 body {
   background: var(--background);
