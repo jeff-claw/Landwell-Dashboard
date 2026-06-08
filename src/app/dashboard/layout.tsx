@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import Sidebar from '@/components/layout/Sidebar'
 import MobileNav from '@/components/layout/MobileNav'
+import { getServiceClient } from '@/lib/supabase'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const cookieStore = await cookies()
@@ -22,11 +23,41 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
+  let { data: profile } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
     .single()
+
+  // Self-heal: a signed-in user with no profile row (e.g. signup that failed
+  // mid-way before the create-profile route existed) would otherwise be stuck
+  // on "Pending Approval" forever AND invisible to admins. Create the missing
+  // profile now — approved+role if the email is pre-approved, else pending.
+  if (!profile && user.email) {
+    try {
+      const admin = getServiceClient()
+      const email = user.email.toLowerCase()
+      const { data: approved } = await admin
+        .from('approved_emails')
+        .select('role')
+        .eq('email', email)
+        .maybeSingle()
+      await admin.from('profiles').upsert(
+        {
+          id: user.id,
+          email,
+          full_name: (user.user_metadata?.full_name as string) || null,
+          role: approved?.role || 'viewer',
+          status: approved ? 'approved' : 'pending',
+        },
+        { onConflict: 'id' }
+      )
+      const reloaded = await admin.from('profiles').select('*').eq('id', user.id).single()
+      profile = reloaded.data
+    } catch {
+      // fall through to the pending screen below
+    }
+  }
 
   if (!profile || profile.status !== 'approved') {
     return (

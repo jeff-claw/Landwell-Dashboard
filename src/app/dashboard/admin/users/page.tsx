@@ -81,15 +81,15 @@ export default function AdminUsersPage() {
     
     // Insert into approved_emails
     try {
-      const { error } = await supabase.from('approved_emails').insert({
-        email: email.toLowerCase(),
-        full_name: fullName || null,
-        role: role || 'viewer',
+      const response = await fetch('/api/pre-approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.toLowerCase(), fullName, role: role || 'viewer' }),
       })
 
-      if (error) {
-        // Supabase responded with an error (RLS denial, constraint, etc.)
-        alert(`Could not add user: ${error.message}${error.code ? ` [${error.code}]` : ''}`)
+      if (!response.ok) {
+        const result = await response.json().catch(() => ({}))
+        alert(`Could not add user: ${result.error || `request failed (${response.status})`}`)
         return
       }
 
@@ -114,7 +114,11 @@ export default function AdminUsersPage() {
 
   const removePreApproved = async (email: string) => {
     if (!confirm(`Remove pre-approval for ${email}?`)) return
-    await supabase.from('approved_emails').delete().eq('email', email)
+    await fetch('/api/pre-approve', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
     fetchPreApproved()
   }
 
