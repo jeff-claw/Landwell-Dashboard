@@ -30,6 +30,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { useReportIssue } from '@/components/ReportIssue'
 import GlobalSearch from '@/components/GlobalSearch'
+import ThemeToggle from '@/components/ThemeToggle'
 import type { UserRole } from '@/lib/types'
 
 const navItems = [
@@ -190,7 +191,8 @@ export default function Sidebar({ userRole }: { userRole?: UserRole }) {
         )}
       </nav>
 
-      <div className="p-4 border-t border-slate-700">
+      <div className="p-4 border-t border-slate-700 space-y-1">
+        <ThemeToggle />
         <button
           onClick={handleSignOut}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors w-full"

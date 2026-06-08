@@ -89,9 +89,9 @@ function getStageLabel(status: string): string {
 }
 
 function getStageColor(status: string): string {
-  if (!status) return 'bg-slate-100 text-slate-700'
+  if (!status) return 'bg-muted text-body'
   const colors: Record<string, string> = {
-    'lead_generated': 'bg-slate-100 text-slate-700',
+    'lead_generated': 'bg-muted text-body',
     'qualification': 'bg-blue-100 text-blue-700',
     'meeting_scheduled': 'bg-cyan-100 text-cyan-700',
     'demo': 'bg-purple-100 text-purple-700',
@@ -100,7 +100,7 @@ function getStageColor(status: string): string {
     'closed_won': 'bg-emerald-100 text-emerald-700',
     'closed_lost': 'bg-red-100 text-red-700',
   }
-  return colors[status] || 'bg-slate-100 text-slate-700'
+  return colors[status] || 'bg-muted text-body'
 }
 
 function daysBetween(date1: Date, date2: Date): number {
@@ -157,15 +157,15 @@ function TodayItemCard({
     return (
       <div 
         onClick={() => router.push(href)}
-        className="flex-shrink-0 w-64 md:w-auto md:flex-1 bg-slate-50 rounded-2xl p-4 border-2 border-dashed border-slate-200 hover:border-teal-300 hover:bg-teal-50/50 transition-all cursor-pointer group"
+        className="flex-shrink-0 w-64 md:w-auto md:flex-1 bg-base rounded-2xl p-4 border-2 border-dashed border-line hover:border-teal-300 hover:bg-teal-50/50 transition-all cursor-pointer group"
       >
         <div className="flex items-center gap-3 mb-3">
           <div className={`w-10 h-10 ${iconBg} rounded-xl flex items-center justify-center opacity-50 group-hover:opacity-100 transition-opacity`}>
             <Icon className={`w-5 h-5 ${iconColor}`} />
           </div>
-          <span className="font-semibold text-slate-400 group-hover:text-slate-600 transition-colors">{title}</span>
+          <span className="font-semibold text-soft group-hover:text-body transition-colors">{title}</span>
         </div>
-        <p className="text-sm text-slate-400">{emptyMessage}</p>
+        <p className="text-sm text-soft">{emptyMessage}</p>
         <span className="text-xs text-teal-600 font-medium mt-2 flex items-center gap-1">
           <Plus className="w-3 h-3" /> {emptyAction}
         </span>
@@ -176,22 +176,22 @@ function TodayItemCard({
   return (
     <div 
       onClick={() => router.push(href)}
-      className="flex-shrink-0 w-64 md:w-auto md:flex-1 bg-white rounded-2xl p-4 border border-slate-200 hover:border-teal-300 hover:shadow-md transition-all cursor-pointer group"
+      className="flex-shrink-0 w-64 md:w-auto md:flex-1 bg-surface rounded-2xl p-4 border border-line hover:border-teal-300 hover:shadow-md transition-all cursor-pointer group"
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 ${iconBg} rounded-xl flex items-center justify-center`}>
             <Icon className={`w-5 h-5 ${iconColor}`} />
           </div>
-          <span className="font-semibold text-slate-700">{title}</span>
+          <span className="font-semibold text-body">{title}</span>
         </div>
-        <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full text-xs font-bold">{items.length}</span>
+        <span className="bg-muted text-body px-2 py-0.5 rounded-full text-xs font-bold">{items.length}</span>
       </div>
       <div className="space-y-2">
         {items.slice(0, 3).map((item) => (
           <div key={item.id} className="text-sm">
-            <div className="font-medium text-slate-800 truncate">{item.label}</div>
-            {item.sublabel && <div className="text-xs text-slate-500">{item.sublabel}</div>}
+            <div className="font-medium text-strong truncate">{item.label}</div>
+            {item.sublabel && <div className="text-xs text-soft">{item.sublabel}</div>}
           </div>
         ))}
         {items.length > 3 && (
@@ -227,17 +227,17 @@ function PipelinePill({
       onClick={() => router.push('/pipeline')}
       className={`flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-all hover:shadow-md hover:scale-[1.02] ${
         isLost 
-          ? 'bg-slate-50 border-slate-200 opacity-60 hover:opacity-100' 
-          : 'bg-white border-slate-200 hover:border-teal-300'
+          ? 'bg-base border-line opacity-60 hover:opacity-100' 
+          : 'bg-surface border-line hover:border-teal-300'
       }`}
     >
       <div className={`w-2 h-2 rounded-full ${color} flex-shrink-0`} />
       <div className="min-w-0">
-        <div className={`text-xs font-medium truncate ${isLost ? 'text-slate-500' : 'text-slate-700'}`}>{stage}</div>
+        <div className={`text-xs font-medium truncate ${isLost ? 'text-soft' : 'text-body'}`}>{stage}</div>
         <div className="flex items-center gap-1.5">
-          <span className={`text-sm font-bold ${isLost ? 'text-slate-400' : 'text-slate-900'}`}>{count}</span>
-          <span className={`text-xs ${isLost ? 'text-slate-400' : 'text-slate-500'}`}>•</span>
-          <span className={`text-xs font-medium ${isLost ? 'text-slate-400' : 'text-teal-600'}`}>{formatCompactCurrency(value)}</span>
+          <span className={`text-sm font-bold ${isLost ? 'text-soft' : 'text-strong'}`}>{count}</span>
+          <span className={`text-xs ${isLost ? 'text-soft' : 'text-soft'}`}>•</span>
+          <span className={`text-xs font-medium ${isLost ? 'text-soft' : 'text-teal-600'}`}>{formatCompactCurrency(value)}</span>
         </div>
       </div>
     </div>
@@ -627,8 +627,8 @@ export default function DashboardHome() {
             <CalendarDays className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-slate-900">Your Day, {firstName}</h1>
-            <p className="text-sm text-slate-500">{formatDate(today)}</p>
+            <h1 className="text-xl md:text-2xl font-bold text-strong">Your Day, {firstName}</h1>
+            <p className="text-sm text-soft">{formatDate(today)}</p>
           </div>
         </div>
 
@@ -681,14 +681,14 @@ export default function DashboardHome() {
           THIS MONTH STATS
       ═══════════════════════════════════════════════════════════════════ */}
       <section>
-        <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <h2 className="text-lg font-bold text-strong mb-4 flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-teal-600" />
           This Month
         </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <ClickableCard href="/clients" className="card-kpi gradient-blue">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-surface/20 rounded-xl flex items-center justify-center">
                 <Users className="w-5 h-5" />
               </div>
               <ArrowRight className="w-4 h-4 opacity-50" />
@@ -699,7 +699,7 @@ export default function DashboardHome() {
 
           <ClickableCard href="/quotes" className="card-kpi gradient-violet">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-surface/20 rounded-xl flex items-center justify-center">
                 <FileText className="w-5 h-5" />
               </div>
               <ArrowRight className="w-4 h-4 opacity-50" />
@@ -710,7 +710,7 @@ export default function DashboardHome() {
 
           <ClickableCard href="/quotes?status=accepted" className="card-kpi gradient-emerald">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-surface/20 rounded-xl flex items-center justify-center">
                 <Target className="w-5 h-5" />
               </div>
               <ArrowRight className="w-4 h-4 opacity-50" />
@@ -721,7 +721,7 @@ export default function DashboardHome() {
 
           <ClickableCard href="/payments" className="card-kpi gradient-amber">
             <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-surface/20 rounded-xl flex items-center justify-center">
                 <DollarSign className="w-5 h-5" />
               </div>
               <ArrowRight className="w-4 h-4 opacity-50" />
@@ -738,45 +738,45 @@ export default function DashboardHome() {
       <section>
         <ClickableCard 
           href="/payments" 
-          className="bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 rounded-2xl p-5"
+          className="bg-gradient-to-br from-slate-50 to-slate-100 border border-line rounded-2xl p-5"
           empty={cashFlow.expectedIn === 0 && cashFlow.goingOut === 0}
         >
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-strong flex items-center gap-2">
               <DollarSign className="w-5 h-5 text-teal-600" />
               Cash Flow This Month
             </h2>
-            <ChevronRight className="w-5 h-5 text-slate-400" />
+            <ChevronRight className="w-5 h-5 text-soft" />
           </div>
 
           {cashFlow.expectedIn === 0 && cashFlow.goingOut === 0 ? (
-            <p className="text-slate-500 text-sm">No pending payments or bills</p>
+            <p className="text-soft text-sm">No pending payments or bills</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Expected In */}
               <div 
                 onClick={(e) => { e.stopPropagation(); window.location.href = '/payments' }}
-                className="bg-white rounded-xl p-4 border border-emerald-200 hover:border-emerald-400 cursor-pointer transition-all"
+                className="bg-surface rounded-xl p-4 border border-emerald-200 hover:border-emerald-400 cursor-pointer transition-all"
               >
                 <div className="flex items-center gap-2 text-sm text-emerald-600 font-medium mb-1">
                   <ArrowUpRight className="w-4 h-4" />
                   Expected In
                 </div>
                 <div className="text-2xl font-bold text-emerald-700">{formatCurrency(cashFlow.expectedIn)}</div>
-                <div className="text-xs text-slate-500 mt-1">Pending client payments</div>
+                <div className="text-xs text-soft mt-1">Pending client payments</div>
               </div>
 
               {/* Going Out */}
               <div 
                 onClick={(e) => { e.stopPropagation(); window.location.href = '/accounts-payable' }}
-                className="bg-white rounded-xl p-4 border border-rose-200 hover:border-rose-400 cursor-pointer transition-all"
+                className="bg-surface rounded-xl p-4 border border-rose-200 hover:border-rose-400 cursor-pointer transition-all"
               >
                 <div className="flex items-center gap-2 text-sm text-rose-600 font-medium mb-1">
                   <ArrowDownRight className="w-4 h-4" />
                   Going Out
                 </div>
                 <div className="text-2xl font-bold text-rose-700">{formatCurrency(cashFlow.goingOut)}</div>
-                <div className="text-xs text-slate-500 mt-1">Supplier bills due</div>
+                <div className="text-xs text-soft mt-1">Supplier bills due</div>
               </div>
 
               {/* Net Position */}
@@ -788,7 +788,7 @@ export default function DashboardHome() {
                 <div className={`text-2xl font-bold ${cashFlow.net >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                   {cashFlow.net >= 0 ? '+' : ''}{formatCurrency(cashFlow.net)}
                 </div>
-                <div className="text-xs text-slate-500 mt-1">{cashFlow.net >= 0 ? 'Positive flow' : 'Cash gap'}</div>
+                <div className="text-xs text-soft mt-1">{cashFlow.net >= 0 ? 'Positive flow' : 'Cash gap'}</div>
               </div>
             </div>
           )}
@@ -801,20 +801,20 @@ export default function DashboardHome() {
       <section>
         <ClickableCard 
           href="/pipeline" 
-          className="bg-white border border-slate-200 rounded-2xl p-5"
+          className="bg-surface border border-line rounded-2xl p-5"
           empty={topDeals.length === 0}
         >
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-strong flex items-center gap-2">
               <Target className="w-5 h-5 text-indigo-600" />
               Top Deals to Focus On
             </h2>
-            <ChevronRight className="w-5 h-5 text-slate-400" />
+            <ChevronRight className="w-5 h-5 text-soft" />
           </div>
 
           {topDeals.length === 0 ? (
             <div className="text-center py-4">
-              <p className="text-slate-500 text-sm mb-2">No active deals — start prospecting!</p>
+              <p className="text-soft text-sm mb-2">No active deals — start prospecting!</p>
               <span className="text-teal-600 text-sm font-medium flex items-center justify-center gap-1">
                 <Plus className="w-4 h-4" /> Add a deal
               </span>
@@ -824,17 +824,17 @@ export default function DashboardHome() {
               {topDeals.map((deal, index) => (
                 <div 
                   key={deal.id} 
-                  className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors"
+                  className="flex items-center gap-3 p-3 bg-base rounded-xl hover:bg-muted transition-colors"
                 >
                   <div className="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 text-xs font-bold flex-shrink-0">
                     {index + 1}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-slate-900 truncate">{deal.client_name || deal.title}</div>
-                    <div className="text-sm text-slate-500">{deal.title !== deal.client_name ? deal.title : ''}</div>
+                    <div className="font-medium text-strong truncate">{deal.client_name || deal.title}</div>
+                    <div className="text-sm text-soft">{deal.title !== deal.client_name ? deal.title : ''}</div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="font-bold text-slate-900">{formatCurrency(Number(deal.value) || 0)}</div>
+                    <div className="font-bold text-strong">{formatCurrency(Number(deal.value) || 0)}</div>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${getStageColor(deal.status)}`}>
                       {getStageLabel(deal.status)}
                     </span>
@@ -851,7 +851,7 @@ export default function DashboardHome() {
       ═══════════════════════════════════════════════════════════════════ */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+          <h2 className="text-lg font-bold text-strong flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-teal-600" />
             Pipeline
           </h2>
@@ -862,9 +862,9 @@ export default function DashboardHome() {
 
         {/* Compact Summary Row */}
         <div className="flex items-center gap-3 mb-3 overflow-x-auto pb-1 scrollbar-hide">
-          <div className="flex-shrink-0 bg-white rounded-xl px-3 py-2 border border-slate-200">
-            <span className="text-xs text-slate-500">Active</span>
-            <span className="text-lg font-bold text-slate-900 ml-2">{stats.activeDealsCount}</span>
+          <div className="flex-shrink-0 bg-surface rounded-xl px-3 py-2 border border-line">
+            <span className="text-xs text-soft">Active</span>
+            <span className="text-lg font-bold text-strong ml-2">{stats.activeDealsCount}</span>
           </div>
           <div className="flex-shrink-0 bg-emerald-50 rounded-xl px-3 py-2 border border-emerald-200">
             <span className="text-xs text-emerald-600">Total</span>
@@ -903,7 +903,7 @@ export default function DashboardHome() {
           NEEDS ATTENTION (ALWAYS shows supplier bills section)
       ═══════════════════════════════════════════════════════════════════ */}
       <section>
-        <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <h2 className="text-lg font-bold text-strong mb-4 flex items-center gap-2">
           <AlertTriangle className="w-5 h-5 text-amber-500" />
           Needs Attention
         </h2>
@@ -923,7 +923,7 @@ export default function DashboardHome() {
                   <p className="text-sm text-red-700 mb-3">No activity in 14+ days</p>
                   <div className="space-y-2">
                     {stats.overdueFollowUps.slice(0, 3).map(d => (
-                      <div key={d.id} className="flex items-center gap-3 bg-white/60 rounded-xl p-2.5">
+                      <div key={d.id} className="flex items-center gap-3 bg-surface/60 rounded-xl p-2.5">
                         <span className="text-red-900 font-medium">{d.client_name || d.title}</span>
                         <span className="text-red-600 text-sm ml-auto">
                           {daysBetween(new Date(d.updated_at || d.created_at), new Date())} days idle
@@ -955,7 +955,7 @@ export default function DashboardHome() {
                   <p className="text-sm text-amber-700 mb-3">Sent 7+ days ago with no response</p>
                   <div className="space-y-2">
                     {stats.coldQuotes.slice(0, 3).map(q => (
-                      <div key={q.id} className="flex items-center gap-3 bg-white/60 rounded-xl p-2.5">
+                      <div key={q.id} className="flex items-center gap-3 bg-surface/60 rounded-xl p-2.5">
                         <span className="font-mono text-sm text-amber-700 font-semibold">{q.quote_number}</span>
                         <span className="text-amber-900 font-medium">{q.client_name}</span>
                         <span className="text-amber-600 text-sm ml-auto">
@@ -976,25 +976,25 @@ export default function DashboardHome() {
 
           {/* Overdue Tasks */}
           {stats.overdueTasks.length > 0 && (
-            <ClickableCard href="/tasks" className="bg-gradient-to-r from-slate-100 to-slate-200 border border-slate-300 rounded-2xl p-5">
+            <ClickableCard href="/tasks" className="bg-gradient-to-r from-slate-100 to-slate-200 border border-line rounded-2xl p-5">
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0 w-12 h-12 bg-slate-200 rounded-2xl flex items-center justify-center">
-                  <CheckSquare className="w-6 h-6 text-slate-600" />
+                  <CheckSquare className="w-6 h-6 text-body" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="font-bold text-slate-900 text-lg">
+                  <h3 className="font-bold text-strong text-lg">
                     {stats.overdueTasks.length} overdue task{stats.overdueTasks.length > 1 ? 's' : ''}
                   </h3>
                   <div className="space-y-2 mt-3">
                     {stats.overdueTasks.slice(0, 3).map(t => (
-                      <div key={t.id} className="flex items-center gap-3 bg-white/60 rounded-xl p-2.5">
-                        <span className="text-slate-900 font-medium">{t.title}</span>
-                        <span className="text-slate-600 text-sm ml-auto">due {t.due_date}</span>
+                      <div key={t.id} className="flex items-center gap-3 bg-surface/60 rounded-xl p-2.5">
+                        <span className="text-strong font-medium">{t.title}</span>
+                        <span className="text-body text-sm ml-auto">due {t.due_date}</span>
                       </div>
                     ))}
                   </div>
                   {stats.overdueTasks.length > 3 && (
-                    <p className="text-sm text-slate-700 font-bold mt-3 flex items-center gap-1">
+                    <p className="text-sm text-body font-bold mt-3 flex items-center gap-1">
                       +{stats.overdueTasks.length - 3} more <ArrowRight className="w-4 h-4" />
                     </p>
                   )}
@@ -1055,13 +1055,13 @@ export default function DashboardHome() {
                   <>
                     <div className="space-y-2 mt-2">
                       {stats.overdueBills.count > 0 && (
-                        <div className="flex items-center justify-between bg-white/60 rounded-xl p-2.5">
+                        <div className="flex items-center justify-between bg-surface/60 rounded-xl p-2.5">
                           <span className="text-rose-700 font-medium">{stats.overdueBills.count} overdue</span>
                           <span className="text-rose-900 font-bold">{formatCurrency(stats.overdueBills.amount)}</span>
                         </div>
                       )}
                       {stats.billsDueThisWeek.count > 0 && (
-                        <div className="flex items-center justify-between bg-white/60 rounded-xl p-2.5">
+                        <div className="flex items-center justify-between bg-surface/60 rounded-xl p-2.5">
                           <span className={`font-medium ${stats.overdueBills.count > 0 ? 'text-rose-600' : 'text-purple-700'}`}>{stats.billsDueThisWeek.count} due this week</span>
                           <span className={`font-bold ${stats.overdueBills.count > 0 ? 'text-rose-800' : 'text-purple-900'}`}>{formatCurrency(stats.billsDueThisWeek.amount)}</span>
                         </div>
@@ -1128,13 +1128,13 @@ export default function DashboardHome() {
                   <>
                     <div className="space-y-2 mt-2">
                       {stats.overdueInvoices.count > 0 && (
-                        <div className="flex items-center justify-between bg-white/60 rounded-xl p-2.5">
+                        <div className="flex items-center justify-between bg-surface/60 rounded-xl p-2.5">
                           <span className="text-red-700 font-medium">{stats.overdueInvoices.count} overdue</span>
                           <span className="text-red-900 font-bold">{formatCurrency(stats.overdueInvoices.amount)}</span>
                         </div>
                       )}
                       {stats.invoicesDueThisMonth.count > 0 && (
-                        <div className="flex items-center justify-between bg-white/60 rounded-xl p-2.5">
+                        <div className="flex items-center justify-between bg-surface/60 rounded-xl p-2.5">
                           <span className={`font-medium ${stats.overdueInvoices.count > 0 ? 'text-red-600' : 'text-blue-700'}`}>{stats.invoicesDueThisMonth.count} due this month</span>
                           <span className={`font-bold ${stats.overdueInvoices.count > 0 ? 'text-red-800' : 'text-blue-900'}`}>{formatCurrency(stats.invoicesDueThisMonth.amount)}</span>
                         </div>
@@ -1155,21 +1155,21 @@ export default function DashboardHome() {
           RECENT ACTIVITY - NEW
       ═══════════════════════════════════════════════════════════════════ */}
       <section>
-        <div className="bg-white border border-slate-200 rounded-2xl p-5">
-          <h2 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2">
+        <div className="bg-surface border border-line rounded-2xl p-5">
+          <h2 className="text-lg font-bold text-strong mb-4 flex items-center gap-2">
             <Activity className="w-5 h-5 text-cyan-600" />
             Recent Activity
           </h2>
 
           {recentActivity.length === 0 ? (
-            <p className="text-slate-500 text-sm text-center py-4">No recent activity</p>
+            <p className="text-soft text-sm text-center py-4">No recent activity</p>
           ) : (
             <div className="space-y-3">
               {recentActivity.map((activity) => (
                 <Link
                   key={activity.id}
                   href={activity.href}
-                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 transition-colors"
+                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-base transition-colors"
                 >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                     activity.type === 'quote' ? 'bg-violet-100' :
@@ -1183,12 +1183,12 @@ export default function DashboardHome() {
                     {activity.type === 'deal' && <Target className="w-4 h-4 text-indigo-600" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-slate-800 truncate">{activity.title}</div>
+                    <div className="font-medium text-strong truncate">{activity.title}</div>
                     {activity.subtitle && (
-                      <div className="text-sm text-slate-500 truncate">{activity.subtitle}</div>
+                      <div className="text-sm text-soft truncate">{activity.subtitle}</div>
                     )}
                   </div>
-                  <div className="text-xs text-slate-400 flex-shrink-0">
+                  <div className="text-xs text-soft flex-shrink-0">
                     {formatRelativeTime(activity.timestamp)}
                   </div>
                 </Link>
@@ -1231,7 +1231,7 @@ export default function DashboardHome() {
               {quickWins.map((deal) => (
                 <div 
                   key={deal.id} 
-                  className="flex items-center gap-3 p-3 bg-white/60 rounded-xl"
+                  className="flex items-center gap-3 p-3 bg-surface/60 rounded-xl"
                 >
                   <div className="w-8 h-8 bg-emerald-200 rounded-lg flex items-center justify-center flex-shrink-0">
                     <Trophy className="w-4 h-4 text-emerald-700" />
@@ -1293,13 +1293,13 @@ export default function DashboardHome() {
                     </div>
                   ) : (
                     <div className="space-y-2 mt-2">
-                      <div className="flex items-center justify-between bg-white/60 rounded-xl p-2.5">
+                      <div className="flex items-center justify-between bg-surface/60 rounded-xl p-2.5">
                         <span className={`font-medium ${criticalHigh.length > 0 ? 'text-orange-700' : 'text-amber-700'}`}>
                           {openTickets.length} open ticket{openTickets.length !== 1 ? 's' : ''}
                         </span>
                       </div>
                       {criticalHigh.length > 0 && (
-                        <div className="flex items-center justify-between bg-white/60 rounded-xl p-2.5">
+                        <div className="flex items-center justify-between bg-surface/60 rounded-xl p-2.5">
                           <span className="text-red-700 font-medium">
                             {criticalHigh.length} critical/high priority
                           </span>

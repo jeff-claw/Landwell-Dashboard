@@ -37,6 +37,12 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+        {/* Apply saved theme before first paint to avoid a flash. Light is default. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{if(localStorage.getItem('theme')==='dark'){document.documentElement.classList.add('dark')}}catch(e){}})()`,
+          }}
+        />
       </head>
       <body className={inter.className}>
         {children}

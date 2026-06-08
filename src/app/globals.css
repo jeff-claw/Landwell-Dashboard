@@ -2,12 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme is controlled explicitly via the `.dark` class on <html>
+   (Tailwind darkMode:"class"), set by the in-app theme slider — never by the
+   OS preference. Light is the default. */
 :root {
-  /* Light-only app: lock native controls (date pickers, selects, scrollbars)
-     to light rendering so the OS dark theme can't auto-darken them. */
   color-scheme: light;
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Semantic tokens (light) */
+  --surface: #ffffff;      /* cards / panels */
+  --base: #f8fafc;         /* page background (slate-50) */
+  --muted: #f1f5f9;        /* subtle fills (slate-100) */
+  --text-strong: #0f172a;  /* headings (slate-900) */
+  --text-body: #334155;    /* body text (slate-700) */
+  --text-soft: #64748b;    /* secondary text (slate-500) */
+  --line: #e2e8f0;         /* borders (slate-200) */
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #0b1220;
+  --foreground: #e2e8f0;
+
+  /* Semantic tokens (dark) */
+  --surface: #0f172a;      /* cards (slate-900) */
+  --base: #020617;         /* page background (slate-950) */
+  --muted: #1e293b;        /* subtle fills (slate-800) */
+  --text-strong: #f1f5f9;  /* headings (slate-100) */
+  --text-body: #cbd5e1;    /* body text (slate-300) */
+  --text-soft: #94a3b8;    /* secondary text (slate-400) */
+  --line: #1e293b;         /* borders (slate-800) */
 }
 
 @theme inline {

@@ -30,17 +30,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   if (!profile || profile.status !== 'approved') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-8 max-w-md w-full text-center">
-          <h2 className="text-xl font-bold text-slate-900 mb-2">Pending Approval</h2>
-          <p className="text-slate-500 text-sm mb-4">Your account is awaiting admin approval.</p>
+      <div className="min-h-screen flex items-center justify-center bg-base px-4">
+        <div className="bg-surface rounded-xl shadow-sm border border-line p-8 max-w-md w-full text-center">
+          <h2 className="text-xl font-bold text-strong mb-2">Pending Approval</h2>
+          <p className="text-soft text-sm mb-4">Your account is awaiting admin approval.</p>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 overflow-x-hidden">
+    <div className="min-h-screen bg-base overflow-x-hidden">
       <MobileNav userRole={profile.role} />
       <div className="flex">
         <Sidebar userRole={profile.role} />
