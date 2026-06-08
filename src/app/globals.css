@@ -3,6 +3,9 @@
 @tailwind utilities;
 
 :root {
+  /* Light-only app: lock native controls (date pickers, selects, scrollbars)
+     to light rendering so the OS dark theme can't auto-darken them. */
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #171717;
 }
