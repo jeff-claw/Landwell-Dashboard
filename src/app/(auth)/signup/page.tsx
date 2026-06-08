@@ -32,19 +32,25 @@ export default function SignupPage() {
 
     if (data.user) {
       // Use server-side API to create profile (bypasses RLS)
-      const response = await fetch('/api/create-profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: data.user.id,
-          email,
-          fullName,
-        }),
-      })
+      try {
+        const response = await fetch('/api/create-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: data.user.id,
+            email,
+            fullName,
+          }),
+        })
 
-      if (!response.ok) {
-        const result = await response.json()
-        setError(result.error || 'Failed to create profile')
+        if (!response.ok) {
+          const result = await response.json().catch(() => ({}))
+          setError(result.error || `Failed to create profile (${response.status})`)
+          setLoading(false)
+          return
+        }
+      } catch {
+        setError('Could not reach the profile service — please try again.')
         setLoading(false)
         return
       }
