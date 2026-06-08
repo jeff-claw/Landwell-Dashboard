@@ -33,7 +33,6 @@ import { useReportIssue } from '@/components/ReportIssue'
 import GlobalSearch from '@/components/GlobalSearch'
 import ThemeToggle from '@/components/ThemeToggle'
 import type { UserRole } from '@/lib/types'
-import { canAccess, pathToPageKey } from '@/lib/pages'
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -72,10 +71,9 @@ const founderItems = [
   { href: '/expenses', label: 'Expenses', icon: Banknote },
 ]
 
-export default function Sidebar({ userRole, pageAccess }: { userRole?: UserRole; pageAccess?: string[] | null }) {
+export default function Sidebar({ userRole }: { userRole?: UserRole }) {
   const pathname = usePathname()
   const { open: openReportIssue } = useReportIssue()
-  const allow = (href: string) => canAccess(userRole, pageAccess, pathToPageKey(href))
 
   const handleSignOut = async () => {
     const supabase = createClient()
@@ -104,7 +102,7 @@ export default function Sidebar({ userRole, pageAccess }: { userRole?: UserRole;
       </div>
 
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-        {navItems.filter(i => allow(i.href)).map((item) => {
+        {navItems.map((item) => {
           const isActive = pathname === item.href
           return (
             <Link
@@ -126,7 +124,7 @@ export default function Sidebar({ userRole, pageAccess }: { userRole?: UserRole;
           <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
             Admin
           </p>
-          {adminItems.filter(i => allow(i.href)).map((item) => {
+          {adminItems.map((item) => {
             const isActive = pathname === item.href
             return (
               <Link
@@ -150,7 +148,7 @@ export default function Sidebar({ userRole, pageAccess }: { userRole?: UserRole;
             <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
               HR
             </p>
-            {hrItems.filter(i => allow(i.href)).map((item) => {
+            {hrItems.map((item) => {
               const isActive = pathname === item.href || (item.href === '/hr' && pathname.startsWith('/hr') && pathname !== '/hr/compliance')
               return (
                 <Link
@@ -175,7 +173,7 @@ export default function Sidebar({ userRole, pageAccess }: { userRole?: UserRole;
             <p className="px-3 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
               Founder
             </p>
-            {founderItems.filter(i => allow(i.href)).map((item) => {
+            {founderItems.map((item) => {
               const isActive = pathname === item.href
               return (
                 <Link

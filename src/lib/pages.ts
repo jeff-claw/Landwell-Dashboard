@@ -49,7 +49,7 @@ export function canAccess(
   pageKey: string
 ): boolean {
   if (role === 'founder') return true
-  if (pageKey === 'dashboard' || pageKey === 'access-denied') return true
+  if (pageKey === 'access-denied') return true // the denied screen itself
   if (!pageAccess) return true // null/unset = full access
   return pageAccess.includes(pageKey)
 }
