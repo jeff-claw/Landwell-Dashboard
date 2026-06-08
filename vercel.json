@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    { "source": "/clients/:path*", "destination": "/dashboard/clients/:path*" },
+    { "source": "/pipeline", "destination": "/dashboard/pipeline" },
+    { "source": "/quotes/:path*", "destination": "/dashboard/quotes/:path*" },
+    { "source": "/tickets/:path*", "destination": "/dashboard/tickets/:path*" },
+    { "source": "/payments", "destination": "/dashboard/payments" },
+    { "source": "/tasks", "destination": "/dashboard/tasks" },
+    { "source": "/calendar", "destination": "/dashboard/calendar" },
+    { "source": "/products", "destination": "/dashboard/products" },
+    { "source": "/purchase-orders/:path*", "destination": "/dashboard/purchase-orders/:path*" },
+    { "source": "/invoices", "destination": "/dashboard/invoices" },
+    { "source": "/expenses", "destination": "/dashboard/expenses" },
+    { "source": "/admin/:path*", "destination": "/dashboard/admin/:path*" },
+    { "source": "/pricelist", "destination": "/dashboard/pricelist" },
+    { "source": "/accounts-payable", "destination": "/dashboard/accounts-payable" },
+    { "source": "/project-log", "destination": "/dashboard/project-log" },
+    { "source": "/hr/:path*", "destination": "/dashboard/hr/:path*" },
+    { "source": "/stock", "destination": "/dashboard/stock" },
+    { "source": "/reports", "destination": "/dashboard/reports" },
+    { "source": "/reminders", "destination": "/dashboard/reminders" },
+    { "source": "/orders", "destination": "/dashboard/orders" }
+  ]
+}
