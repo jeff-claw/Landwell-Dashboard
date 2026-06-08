@@ -1,6 +1,7 @@
 {
   "rewrites": [
     { "source": "/clients/:path*", "destination": "/dashboard/clients/:path*" },
+    { "source": "/weekly-review", "destination": "/dashboard/weekly-review" },
     { "source": "/pipeline", "destination": "/dashboard/pipeline" },
     { "source": "/quotes/:path*", "destination": "/dashboard/quotes/:path*" },
     { "source": "/tickets/:path*", "destination": "/dashboard/tickets/:path*" },
