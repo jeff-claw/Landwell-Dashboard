@@ -18,6 +18,7 @@ export interface Profile {
   role: UserRole
   status: UserStatus
   created_at: string
+  page_access?: string[] | null
 }
 
 export interface Client {

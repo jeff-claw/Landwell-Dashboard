@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { Profile, UserRole, UserStatus } from '@/lib/types'
-import { CheckCircle2, XCircle, Clock, Plus, X, UserPlus, Trash2 } from 'lucide-react'
+import { CheckCircle2, XCircle, Clock, Plus, X, UserPlus, Trash2, Lock } from 'lucide-react'
+import { PAGES } from '@/lib/pages'
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<Profile[]>([])
@@ -120,6 +121,42 @@ export default function AdminUsersPage() {
       body: JSON.stringify({ email }),
     })
     fetchPreApproved()
+  }
+
+  // ----- Per-user page access -----
+  const [accessUser, setAccessUser] = useState<Profile | null>(null)
+  const [accessSel, setAccessSel] = useState<string[]>([])
+  const [accessSaving, setAccessSaving] = useState(false)
+
+  const openAccess = (user: Profile) => {
+    setAccessUser(user)
+    setAccessSel(user.page_access ?? PAGES.map(p => p.key))
+  }
+  const toggleAccess = (key: string) => {
+    setAccessSel(sel => (sel.includes(key) ? sel.filter(k => k !== key) : [...sel, key]))
+  }
+  const saveAccess = async () => {
+    if (!accessUser) return
+    setAccessSaving(true)
+    try {
+      const allSelected = accessSel.length === PAGES.length
+      const res = await fetch('/api/update-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: accessUser.id, page_access: allSelected ? null : accessSel }),
+      })
+      if (!res.ok) {
+        const r = await res.json().catch(() => ({}))
+        alert(`Could not save access: ${r.error || res.status}`)
+        return
+      }
+      setAccessUser(null)
+      fetchUsers()
+    } catch {
+      alert('Could not save access — please try again.')
+    } finally {
+      setAccessSaving(false)
+    }
   }
 
   const statusIcon = (status: UserStatus) => {
@@ -255,6 +292,15 @@ export default function AdminUsersPage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      {user.role !== 'founder' && (
+                        <button
+                          onClick={() => openAccess(user)}
+                          className="px-3 py-1 text-xs font-medium bg-muted text-body rounded-lg hover:bg-base inline-flex items-center gap-1"
+                          title="Manage page access"
+                        >
+                          <Lock className="w-3 h-3" /> Access
+                        </button>
+                      )}
                       {user.status === 'approved' && (
                         <button
                           onClick={() => updateUser(user.id, { status: 'rejected' })}
@@ -354,6 +400,37 @@ export default function AdminUsersPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Access modal */}
+      {accessUser && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setAccessUser(null)}>
+          <div className="bg-surface rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[90vh] overflow-y-auto p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-lg font-bold text-strong">Page Access</h2>
+              <button onClick={() => setAccessUser(null)} className="p-1 hover:bg-muted rounded-lg"><X className="w-5 h-5 text-soft" /></button>
+            </div>
+            <p className="text-sm text-soft mb-4">
+              {accessUser.full_name || accessUser.email} can see the ticked pages. Unticked pages show &ldquo;Access Denied&rdquo;.
+            </p>
+            <div className="flex items-center gap-3 mb-3 text-xs">
+              <button onClick={() => setAccessSel(PAGES.map(p => p.key))} className="text-teal-600 hover:underline">Select all</button>
+              <button onClick={() => setAccessSel([])} className="text-teal-600 hover:underline">Clear all</button>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-1 mb-5">
+              {PAGES.map(p => (
+                <label key={p.key} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-muted cursor-pointer text-sm text-body">
+                  <input type="checkbox" checked={accessSel.includes(p.key)} onChange={() => toggleAccess(p.key)} className="accent-teal-600" />
+                  {p.label}
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setAccessUser(null)} className="btn-secondary">Cancel</button>
+              <button onClick={saveAccess} disabled={accessSaving} className="btn-primary">{accessSaving ? 'Saving…' : 'Save access'}</button>
+            </div>
           </div>
         </div>
       )}

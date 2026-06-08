@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { pathToPageKey, canAccess } from '@/lib/pages'
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -52,6 +53,26 @@ export async function middleware(request: NextRequest) {
   // Redirect authenticated users away from auth pages
   if (user && (request.nextUrl.pathname.startsWith('/login') || request.nextUrl.pathname.startsWith('/signup'))) {
     return NextResponse.redirect(new URL('/', request.url))
+  }
+
+  // Per-user page access control. Founders bypass; null page_access = full access.
+  if (user) {
+    const path = request.nextUrl.pathname
+    const isAppPage = !path.startsWith('/api') && !path.startsWith('/login') && !path.startsWith('/signup')
+    const pageKey = pathToPageKey(path)
+    if (isAppPage && pageKey !== 'access-denied') {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, page_access')
+        .eq('id', user.id)
+        .single()
+      if (!canAccess(profile?.role, profile?.page_access as string[] | null, pageKey)) {
+        const url = request.nextUrl.clone()
+        url.pathname = '/dashboard/access-denied'
+        url.search = `?page=${encodeURIComponent(pageKey)}`
+        return NextResponse.rewrite(url)
+      }
+    }
   }
 
   return response

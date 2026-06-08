@@ -72,9 +72,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="min-h-screen bg-base overflow-x-hidden">
-      <MobileNav userRole={profile.role} />
+      <MobileNav userRole={profile.role} pageAccess={profile.page_access} />
       <div className="flex">
-        <Sidebar userRole={profile.role} />
+        <Sidebar userRole={profile.role} pageAccess={profile.page_access} />
         <main className="flex-1 p-4 lg:p-8 pb-24 lg:pb-8 min-h-screen overflow-x-hidden w-full max-w-full">
           {children}
         </main>

@@ -33,6 +33,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useState } from 'react'
 import { useReportIssue } from '@/components/ReportIssue'
 import type { UserRole } from '@/lib/types'
+import { canAccess, pathToPageKey } from '@/lib/pages'
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -74,10 +75,11 @@ const bottomNav = [
   { href: '/quotes', label: 'Quotes', icon: FileText },
 ]
 
-export default function MobileNav({ userRole }: { userRole?: UserRole }) {
+export default function MobileNav({ userRole, pageAccess }: { userRole?: UserRole; pageAccess?: string[] | null }) {
   const pathname = usePathname()
   const [menuOpen, setMenuOpen] = useState(false)
   const { open: openReportIssue } = useReportIssue()
+  const allow = (href: string) => canAccess(userRole, pageAccess, pathToPageKey(href))
 
   const handleSignOut = async () => {
     const supabase = createClient()
@@ -115,7 +117,7 @@ export default function MobileNav({ userRole }: { userRole?: UserRole }) {
             <X className="w-6 h-6" />
           </button>
           <nav className="space-y-1">
-            {navItems.map((item) => {
+            {navItems.filter(i => allow(i.href)).map((item) => {
               const isActive = pathname === item.href
               return (
                 <Link
@@ -138,7 +140,7 @@ export default function MobileNav({ userRole }: { userRole?: UserRole }) {
                 <div className="pt-3 mt-3 border-t border-slate-700">
                   <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">HR</p>
                 </div>
-                {hrItems.map((item) => {
+                {hrItems.filter(i => allow(i.href)).map((item) => {
                   const isActive = pathname === item.href || (item.href === '/hr' && pathname.startsWith('/hr') && pathname !== '/hr/compliance')
                   return (
                     <Link
@@ -163,7 +165,7 @@ export default function MobileNav({ userRole }: { userRole?: UserRole }) {
                 <div className="pt-3 mt-3 border-t border-slate-700">
                   <p className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Founder</p>
                 </div>
-                {founderItems.map((item) => {
+                {founderItems.filter(i => allow(i.href)).map((item) => {
                   const isActive = pathname === item.href
                   return (
                     <Link
@@ -196,7 +198,7 @@ export default function MobileNav({ userRole }: { userRole?: UserRole }) {
 
       {/* Bottom tab bar */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex z-40">
-        {bottomNav.map((item) => {
+        {bottomNav.filter(i => allow(i.href)).map((item) => {
           const isActive = pathname === item.href
           return (
             <Link
