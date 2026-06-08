@@ -368,8 +368,13 @@ export default function PipelinePage() {
   const [formula, setFormula] = useState<Formula | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedDeal, setSelectedDeal] = useState<PipelineDeal | null>(null)
+  // Columns start EXPANDED so deal cards are visible on load. Previously all
+  // stages defaulted to collapsed, so the board rendered only headers/counts
+  // with zero visible cards — the page looked empty despite having deals.
+  // Each column still caps at DEALS_PER_COLUMN with a "show more", so this
+  // stays performant even with hundreds of leads.
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(() => {
-    return STAGES.reduce((acc, stage) => ({ ...acc, [stage.key]: true }), {})
+    return STAGES.reduce((acc, stage) => ({ ...acc, [stage.key]: false }), {})
   })
   const [expandedColumns, setExpandedColumns] = useState<Record<string, boolean>>({})
 
