@@ -940,7 +940,7 @@ export default function QuotesPage() {
         .eq('client_id', form.client_id)
     }
 
-    const { error } = await supabase.from('quotes').insert({
+    const quotePayload: Record<string, unknown> = {
       quote_number: quoteNumber,
       client_id: form.client_id || null,
       client_name: form.client_name,
@@ -960,7 +960,14 @@ export default function QuotesPage() {
       discount_type: form.discount_type,
       notes: form.notes,
       line_items: form.line_items,
-    })
+    }
+    let { error } = await supabase.from('quotes').insert(quotePayload)
+    if (error && /show_rrp/i.test(error.message)) {
+      // show_rrp column not added yet — save without it (toggle persists once the column exists)
+      const rest = { ...quotePayload }
+      delete rest.show_rrp
+      ;({ error } = await supabase.from('quotes').insert(rest))
+    }
 
     setSaving(false)
     if (error) {
@@ -1013,7 +1020,7 @@ export default function QuotesPage() {
     if (!detailQuote) return
     const loadingToast = toast.loading('Saving changes...')
     
-    const { error } = await supabase.from('quotes').update({
+    const updatePayload: Record<string, unknown> = {
       client_name: editForm.client_name,
       client_contact: editForm.client_contact,
       client_email: editForm.client_email,
@@ -1032,7 +1039,13 @@ export default function QuotesPage() {
       notes: editForm.notes,
       line_items: editForm.line_items,
       updated_at: new Date().toISOString(),
-    }).eq('id', detailQuote.id)
+    }
+    let { error } = await supabase.from('quotes').update(updatePayload).eq('id', detailQuote.id)
+    if (error && /show_rrp/i.test(error.message)) {
+      const rest = { ...updatePayload }
+      delete rest.show_rrp
+      ;({ error } = await supabase.from('quotes').update(rest).eq('id', detailQuote.id))
+    }
 
     if (error) {
       console.error('Error saving quote:', JSON.stringify(error))
