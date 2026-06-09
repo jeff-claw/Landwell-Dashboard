@@ -192,7 +192,20 @@ function calculateZarPrice(
   if (clientType === 'End User' || clientType === 'end_user') {
     return resellerWithInstall / endUserDivisor
   }
-  return includeInstallation ? resellerWithInstall : resellerNoInstall
+
+  // Reseller and Single Seller share the same base; Single Seller adds 15%.
+  const resellerBase = includeInstallation ? resellerWithInstall : resellerNoInstall
+  if (clientType === 'Single Seller' || clientType === 'single_seller') {
+    return resellerBase * 1.15
+  }
+  return resellerBase
+}
+
+// Normalise a client-type value (display label or db value) to the db value.
+function toDbClientType(v: string): string {
+  if (v === 'Reseller' || v === 'reseller') return 'reseller'
+  if (v === 'Single Seller' || v === 'single_seller') return 'single_seller'
+  return 'end_user'
 }
 
 // Keep full precision - no rounding
@@ -285,7 +298,7 @@ function generatePdfHtml(quote: Quote, formula: Formula | null): string {
 
   // Show RRP for Resellers - calculate using End User pricing for any USD items
   const hasUsdItems = lineItems.some(item => (item.currency || quote.currency || 'USD') === 'USD')
-  const rrp = (quote.client_type === 'Reseller' || quote.client_type === 'reseller') && hasUsdItems
+  const rrp = ['Reseller', 'reseller', 'Single Seller', 'single_seller'].includes(quote.client_type) && hasUsdItems
     ? lineItems.reduce((sum, item) => {
         const itemCurrency = item.currency || quote.currency || 'USD'
         if (itemCurrency === 'USD') {
@@ -905,7 +918,7 @@ export default function QuotesPage() {
           contact_person: form.client_contact,
           email: form.client_email,
           vat_number: form.client_vat,
-          type: form.client_type === 'Reseller' ? 'reseller' : 'end_user',
+          type: toDbClientType(form.client_type) === 'end_user' ? 'end_user' : 'reseller',
         }).select('id').single()
 
         if (newClient) {
@@ -932,7 +945,7 @@ export default function QuotesPage() {
       client_contact: form.client_contact,
       client_email: form.client_email,
       client_vat: form.client_vat,
-      client_type: form.client_type === 'Reseller' ? 'reseller' : 'end_user',
+      client_type: toDbClientType(form.client_type),
       project_title: form.project_title,
       date: form.date,
       due_date: form.due_date,
@@ -1001,7 +1014,7 @@ export default function QuotesPage() {
       client_contact: editForm.client_contact,
       client_email: editForm.client_email,
       client_vat: editForm.client_vat,
-      client_type: editForm.client_type === 'Reseller' ? 'reseller' : 'end_user',
+      client_type: toDbClientType(editForm.client_type),
       project_title: editForm.project_title,
       date: editForm.date,
       due_date: editForm.due_date,
@@ -1612,6 +1625,7 @@ export default function QuotesPage() {
                   <label className="mb-1 block text-sm font-semibold text-slate-700">Client Type</label>
                   <div className="flex rounded-xl overflow-hidden border border-slate-300">
                     <button type="button" onClick={() => setEditForm(f => ({ ...f, client_type: 'Reseller' }))} className={`flex-1 py-2 text-sm font-semibold transition ${editForm.client_type === 'Reseller' || editForm.client_type === 'reseller' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600'}`}>Reseller</button>
+                    <button type="button" onClick={() => setEditForm(f => ({ ...f, client_type: 'Single Seller' }))} className={`flex-1 py-2 text-sm font-semibold transition ${editForm.client_type === 'Single Seller' || editForm.client_type === 'single_seller' ? 'bg-purple-600 text-white' : 'bg-white text-slate-600'}`}>Single Seller</button>
                     <button type="button" onClick={() => setEditForm(f => ({ ...f, client_type: 'End User' }))} className={`flex-1 py-2 text-sm font-semibold transition ${editForm.client_type === 'End User' || editForm.client_type === 'end_user' ? 'bg-green-600 text-white' : 'bg-white text-slate-600'}`}>End User</button>
                   </div>
                 </div>
@@ -1779,7 +1793,7 @@ export default function QuotesPage() {
                     <p className="font-medium text-slate-800">{detailQuote.client_name}</p>
                     {detailQuote.client_contact && <p className="text-sm text-slate-600">{detailQuote.client_contact}</p>}
                     {detailQuote.client_email && <p className="text-sm text-slate-600">{detailQuote.client_email}</p>}
-                    <Badge variant={detailQuote.client_type === 'Reseller' || detailQuote.client_type === 'reseller' ? 'blue' : 'green'} className="mt-2">{detailQuote.client_type === 'reseller' ? 'Reseller' : detailQuote.client_type === 'end_user' ? 'End User' : detailQuote.client_type}</Badge>
+                    <Badge variant={detailQuote.client_type === 'end_user' || detailQuote.client_type === 'End User' ? 'green' : 'blue'} className="mt-2">{detailQuote.client_type === 'reseller' ? 'Reseller' : detailQuote.client_type === 'single_seller' ? 'Single Seller' : detailQuote.client_type === 'end_user' ? 'End User' : detailQuote.client_type}</Badge>
                   </div>
                   <div className="bg-slate-50 rounded-xl p-4">
                     <h4 className="text-xs font-semibold text-slate-500 uppercase mb-2">Details</h4>
@@ -1903,6 +1917,7 @@ export default function QuotesPage() {
             <label className="mb-1 block text-sm font-semibold text-slate-700">Client Type</label>
             <div className="flex rounded-xl overflow-hidden border border-slate-300">
               <button type="button" onClick={() => setForm(f => ({ ...f, client_type: 'Reseller' }))} className={`flex-1 py-3 text-sm font-semibold transition ${form.client_type === 'Reseller' || form.client_type === 'reseller' ? 'bg-blue-600 text-white' : 'bg-white text-slate-600'}`}>Reseller</button>
+              <button type="button" onClick={() => setForm(f => ({ ...f, client_type: 'Single Seller' }))} className={`flex-1 py-3 text-sm font-semibold transition ${form.client_type === 'Single Seller' || form.client_type === 'single_seller' ? 'bg-purple-600 text-white' : 'bg-white text-slate-600'}`}>Single Seller</button>
               <button type="button" onClick={() => setForm(f => ({ ...f, client_type: 'End User' }))} className={`flex-1 py-3 text-sm font-semibold transition ${form.client_type === 'End User' || form.client_type === 'end_user' ? 'bg-green-600 text-white' : 'bg-white text-slate-600'}`}>End User</button>
             </div>
           </div>
