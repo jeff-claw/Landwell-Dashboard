@@ -962,7 +962,7 @@ export default function QuotesPage() {
     setSaving(false)
     if (error) {
       console.error('Error creating quote:', error)
-      toast.error('Failed to create quote')
+      toast.error(`Failed to create quote: ${error.message}`)
       return
     }
 
