@@ -75,6 +75,7 @@ export interface Quote {
   currency: string
   region: string
   include_installation: boolean
+  show_rrp?: boolean
   discount: number
   discount_type: string
   notes: string

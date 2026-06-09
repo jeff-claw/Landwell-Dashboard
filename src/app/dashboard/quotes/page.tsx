@@ -134,6 +134,7 @@ interface EmptyQuote {
   currency: string
   region: string
   include_installation: boolean
+  show_rrp: boolean
   discount: number
   discount_type: string
   notes: string
@@ -159,6 +160,7 @@ const getEmptyQuote = (): EmptyQuote => {
     currency: 'USD', // Default currency for new items (legacy, now per-item)
     region: 'Gauteng',
     include_installation: false,
+    show_rrp: true,
     discount: 0,
     discount_type: 'percent',
     notes: '',
@@ -298,7 +300,7 @@ function generatePdfHtml(quote: Quote, formula: Formula | null): string {
 
   // Show RRP for Resellers - calculate using End User pricing for any USD items
   const hasUsdItems = lineItems.some(item => (item.currency || quote.currency || 'USD') === 'USD')
-  const rrp = ['Reseller', 'reseller', 'Single Seller', 'single_seller'].includes(quote.client_type) && hasUsdItems
+  const rrp = quote.show_rrp !== false && ['Reseller', 'reseller', 'Single Seller', 'single_seller'].includes(quote.client_type) && hasUsdItems
     ? lineItems.reduce((sum, item) => {
         const itemCurrency = item.currency || quote.currency || 'USD'
         if (itemCurrency === 'USD') {
@@ -953,6 +955,7 @@ export default function QuotesPage() {
       currency: form.currency,
       region: form.region,
       include_installation: form.include_installation,
+      show_rrp: form.show_rrp,
       discount: form.discount,
       discount_type: form.discount_type,
       notes: form.notes,
@@ -991,6 +994,7 @@ export default function QuotesPage() {
       currency: quote.currency || 'ZAR',
       region: quote.region || 'Gauteng',
       include_installation: quote.include_installation || false,
+      show_rrp: quote.show_rrp ?? true,
       discount: quote.discount || 0,
       discount_type: quote.discount_type || 'percent',
       notes: quote.notes || '',
@@ -1022,6 +1026,7 @@ export default function QuotesPage() {
       currency: editForm.currency,
       region: editForm.region,
       include_installation: editForm.include_installation,
+      show_rrp: editForm.show_rrp,
       discount: editForm.discount,
       discount_type: editForm.discount_type,
       notes: editForm.notes,
@@ -1647,6 +1652,15 @@ export default function QuotesPage() {
                   </div>
                 </div>
 
+                {/* Recommended Retail Price on PDF */}
+                <div>
+                  <label className="mb-1 block text-sm font-semibold text-slate-700">Recommended retail price on PDF</label>
+                  <div className="flex rounded-xl overflow-hidden border border-slate-300">
+                    <button type="button" onClick={() => setEditForm(f => ({ ...f, show_rrp: true }))} className={`flex-1 py-2 text-sm font-semibold transition ${editForm.show_rrp ? 'bg-teal-600 text-white' : 'bg-white text-slate-600'}`}>Show</button>
+                    <button type="button" onClick={() => setEditForm(f => ({ ...f, show_rrp: false }))} className={`flex-1 py-2 text-sm font-semibold transition ${!editForm.show_rrp ? 'bg-slate-700 text-white' : 'bg-white text-slate-600'}`}>Hide</button>
+                  </div>
+                </div>
+
                 {/* Client */}
                 <div className="grid grid-cols-2 gap-3">
                   <input value={editForm.client_name || ''} onChange={(e) => setEditForm(f => ({ ...f, client_name: e.target.value }))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" placeholder="Client Name" />
@@ -1937,6 +1951,16 @@ export default function QuotesPage() {
                 <button type="button" onClick={() => setForm(f => ({ ...f, include_installation: true }))} className={`flex-1 py-3 text-sm font-semibold transition ${form.include_installation ? 'bg-blue-600 text-white' : 'bg-white text-slate-600'}`}>Yes (+Region)</button>
               </div>
             </div>
+          </div>
+
+          {/* Recommended Retail Price on PDF */}
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-slate-700">Recommended retail price on PDF</label>
+            <div className="flex rounded-xl overflow-hidden border border-slate-300">
+              <button type="button" onClick={() => setForm(f => ({ ...f, show_rrp: true }))} className={`flex-1 py-3 text-sm font-semibold transition ${form.show_rrp ? 'bg-teal-600 text-white' : 'bg-white text-slate-600'}`}>Show</button>
+              <button type="button" onClick={() => setForm(f => ({ ...f, show_rrp: false }))} className={`flex-1 py-3 text-sm font-semibold transition ${!form.show_rrp ? 'bg-slate-700 text-white' : 'bg-white text-slate-600'}`}>Hide</button>
+            </div>
+            <p className="mt-1 text-xs text-slate-400">Only shows on Reseller / Single Seller quotes that have USD items.</p>
           </div>
 
           {/* Client */}
