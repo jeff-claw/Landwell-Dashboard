@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { StockItem, StockMovement, Formula } from '@/lib/types'
-import { Package, Plus, Minus, AlertTriangle, TrendingUp, TrendingDown, X, Search, History, RefreshCw, Edit2, DollarSign, Upload } from 'lucide-react'
+import { Package, Plus, Minus, AlertTriangle, TrendingUp, TrendingDown, X, Search, History, RefreshCw, Edit2, DollarSign, Upload, Trash2 } from 'lucide-react'
 
 // Modal component
 function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
@@ -362,6 +362,17 @@ export default function ProductsPage() {
     fetchAll()
   }
 
+  // Delete item
+  const handleDeleteItem = async (item: StockItem) => {
+    if (!confirm(`Delete "${item.name}"? This permanently removes the product and cannot be undone.`)) return
+    const { error } = await supabase.from('stock_items').delete().eq('id', item.id)
+    if (error) {
+      alert(`Could not delete product: ${error.message}`)
+      return
+    }
+    fetchAll()
+  }
+
   // Edit item
   const handleEditItem = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -684,6 +695,13 @@ export default function ProductsPage() {
                           title="Adjust stock"
                         >
                           <RefreshCw className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteItem(item)}
+                          className="p-1.5 hover:bg-red-100 rounded-lg text-slate-400 hover:text-red-600"
+                          title="Delete product"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
