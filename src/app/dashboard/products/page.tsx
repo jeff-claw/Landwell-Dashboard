@@ -265,7 +265,8 @@ export default function ProductsPage() {
       setFormImageUrl(data.url)
     } catch (error) {
       console.error('Upload error:', error)
-      alert('Failed to upload image. Please try again or use a URL.')
+      const msg = error instanceof Error ? error.message : 'Unknown error'
+      alert(`Failed to upload image: ${msg}. You can also paste an image URL instead.`)
     } finally {
       setUploadingImage(false)
       if (fileInputRef.current) {
