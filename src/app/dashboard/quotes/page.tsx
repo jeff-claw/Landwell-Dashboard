@@ -842,12 +842,12 @@ export default function QuotesPage() {
     setForm(f => {
       // Products from pricelist are always in USD
       const usdPrice = product.usd_price || 0
-      
+
       return {
         ...f,
         line_items: f.line_items.map((item, i) =>
           i === index
-            ? { ...item, product: product.name, unitPrice: usdPrice, currency: 'USD', image: product.image_url }
+            ? { ...item, product: product.name, unitPrice: usdPrice, currency: 'USD', image: product.image_url, description: product.description || item.description }
             : item
         )
       }
@@ -888,12 +888,12 @@ export default function QuotesPage() {
     setEditForm(f => {
       // Products from pricelist are always in USD
       const usdPrice = product.usd_price || 0
-      
+
       return {
         ...f,
         line_items: f.line_items.map((item, i) =>
           i === index
-            ? { ...item, product: product.name, unitPrice: usdPrice, currency: 'USD', image: product.image_url }
+            ? { ...item, product: product.name, unitPrice: usdPrice, currency: 'USD', image: product.image_url, description: product.description || item.description }
             : item
         )
       }
