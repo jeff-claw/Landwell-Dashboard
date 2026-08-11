@@ -688,6 +688,143 @@ export interface TenderArchiveDocument {
   created_at: string
 }
 
+// Partner Issue Tracker Types (LANDWELL Beijing joint log)
+export type PartnerIssueCategory =
+  | 'Hardware' | 'Network' | 'Software' | 'Product Design'
+  | 'Compliance' | 'After-sales' | 'Commercial' | 'Delivery' | 'Governance'
+export type PartnerIssuePriority = 'critical' | 'high' | 'medium' | 'low'
+export type PartnerIssueStatus =
+  | 'open' | 'in_progress' | 'awaiting_landwell' | 'awaiting_distributor' | 'verified_closed'
+export type PartnerUpdateSide = 'distributor' | 'landwell' | 'internal'
+
+export interface PartnerIssue {
+  id: string
+  ref: string
+  raised_on: string
+  category: PartnerIssueCategory
+  client_id: string | null
+  site: string
+  product_module: string
+  description_en: string
+  description_cn: string
+  business_impact: string
+  priority: PartnerIssuePriority
+  landwell_owner: string
+  distributor_owner: string
+  next_action_en: string
+  next_action_cn: string
+  target_date: string | null
+  first_target_date: string | null
+  times_deferred: number
+  status: PartnerIssueStatus
+  root_cause: string
+  solution: string
+  closure_evidence: string
+  closed_at: string | null
+  downtime_hours: number
+  site_visits: number
+  cost_zar: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  // Joined fields
+  client_name?: string
+}
+
+export interface PartnerIssueUpdate {
+  id: string
+  issue_id: string
+  author_side: PartnerUpdateSide
+  author_name: string
+  body: string
+  source: string
+  created_by: string | null
+  created_at: string
+}
+
+export interface PartnerIssueEvidence {
+  id: string
+  issue_id: string
+  file_url: string
+  file_name: string
+  mime_type: string
+  caption: string
+  device_serial: string
+  captured_at: string | null
+  uploaded_by: string | null
+  created_at: string
+}
+
+export interface PartnerIssueAudit {
+  id: number
+  issue_id: string
+  field: string
+  old_value: string | null
+  new_value: string | null
+  changed_by: string | null
+  changed_at: string
+}
+
+export interface PartnerLink {
+  id: string
+  token: string
+  label: string
+  active: boolean
+  expires_at: string | null
+  view_count: number
+  last_viewed_at: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export const PARTNER_ISSUE_STATUS_CONFIG: Record<
+  PartnerIssueStatus,
+  { label: string; labelCn: string; bg: string; text: string }
+> = {
+  open: { label: 'Open', labelCn: '待处理', bg: 'bg-yellow-100', text: 'text-yellow-700' },
+  in_progress: { label: 'In Progress', labelCn: '处理中', bg: 'bg-blue-100', text: 'text-blue-700' },
+  awaiting_landwell: { label: 'Awaiting LANDWELL', labelCn: '等待 LANDWELL', bg: 'bg-purple-100', text: 'text-purple-700' },
+  awaiting_distributor: { label: 'Awaiting Distributor', labelCn: '等待南非方', bg: 'bg-amber-100', text: 'text-amber-700' },
+  verified_closed: { label: 'Verified Closed', labelCn: '验证关闭', bg: 'bg-emerald-100', text: 'text-emerald-700' },
+}
+
+export const PARTNER_ISSUE_PRIORITY_CONFIG: Record<
+  PartnerIssuePriority,
+  { label: string; labelCn: string; bg: string; text: string }
+> = {
+  critical: { label: 'Critical', labelCn: '紧急', bg: 'bg-red-100', text: 'text-red-700' },
+  high: { label: 'High', labelCn: '高', bg: 'bg-orange-100', text: 'text-orange-700' },
+  medium: { label: 'Medium', labelCn: '中', bg: 'bg-blue-100', text: 'text-blue-700' },
+  low: { label: 'Low', labelCn: '低', bg: 'bg-slate-100', text: 'text-slate-600' },
+}
+
+export const PARTNER_ISSUE_CATEGORIES: { value: PartnerIssueCategory; labelCn: string }[] = [
+  { value: 'Hardware', labelCn: '硬件' },
+  { value: 'Network', labelCn: '网络' },
+  { value: 'Software', labelCn: '软件' },
+  { value: 'Product Design', labelCn: '产品设计' },
+  { value: 'Compliance', labelCn: '合规' },
+  { value: 'After-sales', labelCn: '售后' },
+  { value: 'Commercial', labelCn: '商务' },
+  { value: 'Delivery', labelCn: '交付' },
+  { value: 'Governance', labelCn: '治理' },
+]
+
+// An issue counts as overdue when it has a target date in the past and is not
+// verified closed. Used identically by the list, the partner view and the export.
+export function isPartnerIssueOverdue(issue: Pick<PartnerIssue, 'target_date' | 'status'>): boolean {
+  if (!issue.target_date || issue.status === 'verified_closed') return false
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return new Date(issue.target_date) < today
+}
+
+export function partnerIssueDaysOpen(issue: Pick<PartnerIssue, 'raised_on' | 'closed_at'>): number {
+  const start = new Date(issue.raised_on).getTime()
+  const end = issue.closed_at ? new Date(issue.closed_at).getTime() : Date.now()
+  return Math.max(0, Math.floor((end - start) / 86400000))
+}
+
 export const DEFAULT_TENDER_DOCUMENTS = [
   { name: 'Tax Clearance Certificate', category: 'compliance', is_mandatory: true },
   { name: 'BEE Certificate', category: 'compliance', is_mandatory: true },

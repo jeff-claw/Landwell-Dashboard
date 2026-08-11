@@ -21,6 +21,7 @@ export const PAGES: PageDef[] = [
   { key: 'reminders', label: 'Reminders', href: '/reminders' },
   { key: 'calendar', label: 'Calendar', href: '/calendar' },
   { key: 'tickets', label: 'Tickets', href: '/tickets' },
+  { key: 'partner-issues', label: 'Partner Issues', href: '/partner-issues' },
   { key: 'reports', label: 'Reports', href: '/reports' },
   { key: 'marketing', label: 'Marketing', href: '/marketing' },
   { key: 'admin', label: 'Admin (Users/Formula/Issues)', href: '/admin/users' },

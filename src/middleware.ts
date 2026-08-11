@@ -46,7 +46,11 @@ export async function middleware(request: NextRequest) {
                       request.nextUrl.pathname.startsWith('/api/upload-image') ||
                       request.nextUrl.pathname.startsWith('/api/exchange-rate') ||
                       request.nextUrl.pathname.startsWith('/api/create-profile')
-  if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/signup') && !isPublicApi) {
+  // The partner tracker view is authenticated by the token in its URL, not by a
+  // session — LANDWELL Beijing has no login here. Note the trailing slash: it
+  // must not match the internal /partner-issues pages.
+  const isPartnerView = request.nextUrl.pathname.startsWith('/partner/')
+  if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/signup') && !isPublicApi && !isPartnerView) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
@@ -58,7 +62,7 @@ export async function middleware(request: NextRequest) {
   // Per-user page access control. Founders bypass; null page_access = full access.
   if (user) {
     const path = request.nextUrl.pathname
-    const isAppPage = !path.startsWith('/api') && !path.startsWith('/login') && !path.startsWith('/signup')
+    const isAppPage = !path.startsWith('/api') && !path.startsWith('/login') && !path.startsWith('/signup') && !isPartnerView
     const pageKey = pathToPageKey(path)
     if (isAppPage && pageKey !== 'access-denied') {
       const { data: profile } = await supabase

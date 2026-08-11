@@ -7,6 +7,8 @@
     { "source": "/pipeline", "destination": "/dashboard/pipeline" },
     { "source": "/quotes/:path*", "destination": "/dashboard/quotes/:path*" },
     { "source": "/tickets/:path*", "destination": "/dashboard/tickets/:path*" },
+    { "source": "/partner-issues", "destination": "/dashboard/partner-issues" },
+    { "source": "/partner-issues/:path*", "destination": "/dashboard/partner-issues/:path*" },
     { "source": "/payments", "destination": "/dashboard/payments" },
     { "source": "/tasks", "destination": "/dashboard/tasks" },
     { "source": "/calendar", "destination": "/dashboard/calendar" },
