@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import type { Employee, EmployeeDocument, EmploymentType, EmploymentStatus } from '@/lib/types'
 import { EMPLOYMENT_TYPE_CONFIG, EMPLOYMENT_STATUS_CONFIG } from '@/lib/types'
-import { ArrowLeft, Edit2, Save, X, Plus, Trash2, FileText, Upload } from 'lucide-react'
+import { ArrowLeft, Edit2, Save, X, Plus, Trash2, FileText, Upload, Paperclip } from 'lucide-react'
 import { toast } from 'sonner'
 
 export default function EmployeeProfilePage() {
@@ -28,6 +28,8 @@ export default function EmployeeProfilePage() {
   const [showDocForm, setShowDocForm] = useState(false)
   const [docForm, setDocForm] = useState({ document_type: '', file_name: '', file_url: '', notes: '' })
   const [savingDoc, setSavingDoc] = useState(false)
+  const [uploadingDoc, setUploadingDoc] = useState(false)
+  const docFileInput = useRef<HTMLInputElement>(null)
 
   // Auth check
   useEffect(() => {
@@ -118,9 +120,48 @@ export default function EmployeeProfilePage() {
     fetchEmployee()
   }
 
+  // Uploads straight to the private employee-docs bucket and keeps the returned
+  // storage path on the form; the row is only written when Add Document is
+  // pressed. File name defaults to the uploaded file's own name.
+  const uploadDocument = async (file: File) => {
+    setUploadingDoc(true)
+    const body = new FormData()
+    body.append('file', file)
+    body.append('employee_id', employeeId)
+
+    const res = await fetch('/api/employee-docs/upload', { method: 'POST', body })
+    const json = await res.json()
+    setUploadingDoc(false)
+
+    if (!res.ok) {
+      toast.error(json.error || 'Upload failed')
+      return
+    }
+
+    setDocForm(prev => ({
+      ...prev,
+      file_url: json.path,
+      file_name: prev.file_name.trim() || json.name,
+    }))
+    toast.success('File uploaded')
+  }
+
+  const clearUpload = () => setDocForm(prev => ({ ...prev, file_url: '' }))
+
+  // Old rows hold a plain URL; new rows hold a private storage path that has to
+  // be opened through the signed-URL route.
+  const docHref = (fileUrl: string) =>
+    /^https?:\/\//i.test(fileUrl)
+      ? fileUrl
+      : `/api/employee-docs/view?path=${encodeURIComponent(fileUrl)}`
+
   const addDocument = async () => {
     if (!docForm.file_name.trim() || !docForm.document_type.trim()) {
       toast.error('Document type and file name are required')
+      return
+    }
+    if (!docForm.file_url) {
+      toast.error('Upload a document or image first')
       return
     }
     setSavingDoc(true)
@@ -150,13 +191,20 @@ export default function EmployeeProfilePage() {
     fetchEmployee()
   }
 
-  const deleteDocument = async (docId: string, fileName: string) => {
+  const deleteDocument = async (docId: string, fileName: string, fileUrl: string | null) => {
     if (!confirm(`Delete document "${fileName}"?`)) return
     const { error } = await supabase.from('employee_documents').delete().eq('id', docId)
     if (error) {
       toast.error('Failed to delete document')
       return
     }
+
+    // Drop the stored file too, so nothing personal is left behind. Old rows
+    // pointing at an external URL have nothing of ours to remove.
+    if (fileUrl && !/^https?:\/\//i.test(fileUrl)) {
+      await fetch(`/api/employee-docs/upload?path=${encodeURIComponent(fileUrl)}`, { method: 'DELETE' })
+    }
+
     toast.success('Document deleted')
     fetchEmployee()
   }
@@ -391,14 +439,47 @@ export default function EmployeeProfilePage() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">File URL <span className="text-slate-400">(optional)</span></label>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Document or Image <span className="text-red-500">*</span></label>
               <input
-                type="url"
-                value={docForm.file_url}
-                onChange={(e) => setDocForm({ ...docForm, file_url: e.target.value })}
-                className="input"
-                placeholder="https://..."
+                ref={docFileInput}
+                type="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]
+                  if (f) uploadDocument(f)
+                  e.target.value = ''
+                }}
               />
+              {docForm.file_url ? (
+                <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg">
+                  <Paperclip className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  <span className="text-sm text-slate-700 truncate flex-1">{docForm.file_name || 'Uploaded file'}</span>
+                  <button
+                    onClick={() => docFileInput.current?.click()}
+                    disabled={uploadingDoc}
+                    className="text-xs font-medium text-slate-500 hover:text-teal-700 disabled:opacity-50"
+                  >
+                    Replace
+                  </button>
+                  <button
+                    onClick={clearUpload}
+                    className="p-0.5 rounded text-slate-400 hover:text-red-600 transition"
+                    aria-label="Remove uploaded file"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => docFileInput.current?.click()}
+                  disabled={uploadingDoc}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border border-dashed border-slate-300 rounded-lg text-sm font-medium text-slate-500 hover:border-teal-500 hover:text-teal-700 transition disabled:opacity-50"
+                >
+                  <Upload className="w-4 h-4" />
+                  {uploadingDoc ? 'Uploading...' : 'Choose a file to upload'}
+                </button>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
@@ -433,11 +514,11 @@ export default function EmployeeProfilePage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {doc.file_url && (
-                    <a href={doc.file_url} target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:text-teal-700 text-sm font-medium">
+                    <a href={docHref(doc.file_url)} target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:text-teal-700 text-sm font-medium">
                       View
                     </a>
                   )}
-                  <button onClick={() => deleteDocument(doc.id, doc.file_name)} className="p-1.5 hover:bg-red-50 rounded text-red-500">
+                  <button onClick={() => deleteDocument(doc.id, doc.file_name, doc.file_url)} className="p-1.5 hover:bg-red-50 rounded text-red-500">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
