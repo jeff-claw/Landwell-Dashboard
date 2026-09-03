@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import type { HRComplianceItem, ComplianceStatus } from '@/lib/types'
 import { HR_COMPLIANCE_CATEGORIES, COMPLIANCE_STATUS_CONFIG } from '@/lib/types'
-import { ChevronDown, ChevronRight, CheckCircle, XCircle, AlertTriangle } from 'lucide-react'
+import { ChevronDown, ChevronRight, CheckCircle, XCircle, AlertTriangle, Upload, Paperclip, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function HRCompliancePage() {
   const [items, setItems] = useState<HRComplianceItem[]>([])
@@ -13,6 +14,8 @@ export default function HRCompliancePage() {
   const [authorized, setAuthorized] = useState(false)
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState<string | null>(null)
+  const [uploading, setUploading] = useState<string | null>(null)
+  const fileInputs = useRef<Record<string, HTMLInputElement | null>>({})
   const router = useRouter()
   const supabase = createClient()
 
@@ -145,6 +148,39 @@ export default function HRCompliancePage() {
     setItems(prev => prev.map(i =>
       i.id === itemId ? { ...i, [field]: value || null, updated_at: new Date().toISOString() } : i
     ))
+  }
+
+  // Evidence is uploaded to Supabase Storage and the public URL is stored on the
+  // item, so staff attach the actual policy or certificate instead of pasting a
+  // link to a file nobody else can open.
+  const uploadEvidence = async (itemId: string, file: File) => {
+    setUploading(itemId)
+    const body = new FormData()
+    body.append('file', file)
+    body.append('item_id', itemId)
+
+    const res = await fetch('/api/upload-compliance-doc', { method: 'POST', body })
+    const json = await res.json()
+    setUploading(null)
+
+    if (!res.ok) {
+      toast.error(json.error || 'Upload failed')
+      return
+    }
+
+    await updateItem(itemId, 'evidence_url', json.url)
+    toast.success('Document attached')
+  }
+
+  const removeEvidence = async (itemId: string) => {
+    await updateItem(itemId, 'evidence_url', '')
+    toast.success('Document removed')
+  }
+
+  // Storage paths are `<itemId>/<timestamp>-<original name>` — show the human part.
+  const evidenceName = (url: string) => {
+    const base = decodeURIComponent(url.split('/').pop() || '')
+    return base.replace(/^\d+-/, '') || 'document'
   }
 
   if (!authorized || loading) {
@@ -284,22 +320,55 @@ export default function HRCompliancePage() {
                           </div>
                         </div>
                         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <input
-                            type="url"
-                            value={item.evidence_url || ''}
-                            onBlur={(e) => {
-                              if (e.target.value !== (item.evidence_url || '')) {
-                                updateItem(item.id, 'evidence_url', e.target.value)
-                              }
-                            }}
-                            onChange={(e) => {
-                              setItems(prev => prev.map(i =>
-                                i.id === item.id ? { ...i, evidence_url: e.target.value } : i
-                              ))
-                            }}
-                            placeholder="Evidence URL..."
-                            className="text-xs px-2 py-1.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-teal-500"
-                          />
+                          <div className="flex items-center gap-2">
+                            <input
+                              ref={(el) => { fileInputs.current[item.id] = el }}
+                              type="file"
+                              accept=".pdf,.doc,.docx,.xls,.xlsx,image/*"
+                              className="hidden"
+                              onChange={(e) => {
+                                const f = e.target.files?.[0]
+                                if (f) uploadEvidence(item.id, f)
+                                e.target.value = ''
+                              }}
+                            />
+                            {item.evidence_url ? (
+                              <div className="flex items-center gap-2 flex-1 min-w-0 px-2 py-1.5 bg-white border border-slate-200 rounded-lg">
+                                <Paperclip className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+                                <a
+                                  href={item.evidence_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-teal-700 hover:underline truncate flex-1"
+                                >
+                                  {evidenceName(item.evidence_url)}
+                                </a>
+                                <button
+                                  onClick={() => fileInputs.current[item.id]?.click()}
+                                  disabled={uploading === item.id}
+                                  className="text-xs font-medium text-slate-500 hover:text-teal-700 disabled:opacity-50"
+                                >
+                                  {uploading === item.id ? 'Uploading...' : 'Replace'}
+                                </button>
+                                <button
+                                  onClick={() => removeEvidence(item.id)}
+                                  className="p-0.5 rounded text-slate-400 hover:text-red-600 transition"
+                                  aria-label="Remove document"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => fileInputs.current[item.id]?.click()}
+                                disabled={uploading === item.id}
+                                className="flex items-center justify-center gap-1.5 flex-1 text-xs font-medium px-2 py-1.5 border border-dashed border-slate-300 rounded-lg text-slate-500 hover:border-teal-500 hover:text-teal-700 transition disabled:opacity-50"
+                              >
+                                <Upload className="w-3.5 h-3.5" />
+                                {uploading === item.id ? 'Uploading...' : 'Upload document'}
+                              </button>
+                            )}
+                          </div>
                           <input
                             type="text"
                             value={item.notes || ''}
