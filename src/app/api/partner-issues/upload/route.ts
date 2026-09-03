@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/supabase'
+import { requirePageAccess } from '@/lib/api-auth'
 
 const BUCKET = 'partner-evidence'
 const MAX_BYTES = 25 * 1024 * 1024 // photos and short site videos
@@ -9,6 +10,9 @@ const MAX_BYTES = 25 * 1024 * 1024 // photos and short site videos
 // are allowed, not just images.
 export async function POST(request: Request) {
   try {
+    const denied = await requirePageAccess('partner-issues')
+    if (denied) return denied
+
     const formData = await request.formData()
     const file = formData.get('file')
     const issueId = formData.get('issue_id')

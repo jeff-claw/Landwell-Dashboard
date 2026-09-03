@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/supabase'
+import { requirePageAccess } from '@/lib/api-auth'
 
 const BUCKET = 'compliance-docs'
 const MAX_BYTES = 25 * 1024 * 1024 // scanned policies and signed PDFs get large
@@ -10,6 +11,9 @@ const MAX_BYTES = 25 * 1024 * 1024 // scanned policies and signed PDFs get large
 // manual storage setup is required.
 export async function POST(request: Request) {
   try {
+    const denied = await requirePageAccess('hr')
+    if (denied) return denied
+
     const formData = await request.formData()
     const file = formData.get('file')
     const itemId = formData.get('item_id')

@@ -42,8 +42,10 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   // Redirect unauthenticated users to login (except auth pages and certain API routes)
+  // /api/upload-image is deliberately NOT here: it writes to storage with the
+  // service-role key, and it is only ever called from the Products page, which
+  // requires a session anyway.
   const isPublicApi = request.nextUrl.pathname.startsWith('/api/migrate') ||
-                      request.nextUrl.pathname.startsWith('/api/upload-image') ||
                       request.nextUrl.pathname.startsWith('/api/exchange-rate') ||
                       request.nextUrl.pathname.startsWith('/api/create-profile')
   // The partner tracker view is authenticated by the token in its URL, not by a

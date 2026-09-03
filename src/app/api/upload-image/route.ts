@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/supabase'
+import { requirePageAccess } from '@/lib/api-auth'
 
 const BUCKET = 'product-images'
 const MAX_BYTES = 5 * 1024 * 1024
@@ -9,6 +10,9 @@ const MAX_BYTES = 5 * 1024 * 1024
 // storage setup is required.
 export async function POST(request: Request) {
   try {
+    const denied = await requirePageAccess('products')
+    if (denied) return denied
+
     const formData = await request.formData()
     const file = formData.get('file')
 
