@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { StockItem, StockMovement, Formula } from '@/lib/types'
 import { Package, Plus, Minus, AlertTriangle, TrendingUp, TrendingDown, X, Search, History, RefreshCw, Edit2, DollarSign, Upload, Trash2 } from 'lucide-react'
@@ -152,15 +152,16 @@ export default function ProductsPage() {
     const totalQuantity = items.reduce((sum, item) => sum + (item.quantity || 0), 0)
     const lowStock = items.filter(item => getStockStatus(item.quantity, item.reorder_point) === 'low_stock').length
     const outOfStock = items.filter(item => getStockStatus(item.quantity, item.reorder_point) === 'out_of_stock').length
-    // Calculate total value - convert ZAR items to USD for comparison
-    const totalValue = items.reduce((sum, item) => {
-      const price = item.usd_price || 0
+    // Separate totals per currency — USD stock in $, ZAR stock in R, no conversion
+    const totalUsdValue = items.reduce((sum, item) => {
       const currency = item.currency || 'ZAR'
-      // If ZAR, convert to USD for total (assuming ~18 exchange rate)
-      const usdValue = currency === 'USD' ? price : price / 18
-      return sum + (usdValue * item.quantity)
+      return currency === 'USD' ? sum + (item.usd_price || 0) * item.quantity : sum
     }, 0)
-    return { totalItems, totalQuantity, lowStock, outOfStock, totalValue }
+    const totalZarValue = items.reduce((sum, item) => {
+      const currency = item.currency || 'ZAR'
+      return currency === 'ZAR' ? sum + (item.usd_price || 0) * item.quantity : sum
+    }, 0)
+    return { totalItems, totalQuantity, lowStock, outOfStock, totalUsdValue, totalZarValue }
   }, [items])
 
   // Filter items
@@ -178,6 +179,19 @@ export default function ProductsPage() {
       return true
     })
   }, [items, filterStatus, filterCategory, filterText])
+
+  // Group filtered items by category (fixed category order, unknowns under "Other")
+  const groupedItems = useMemo(() => {
+    const map = new Map<string, typeof filteredItems>()
+    for (const cat of [...PRODUCT_CATEGORIES, 'Other']) map.set(cat, [])
+    for (const item of filteredItems) {
+      const key = item.category && (PRODUCT_CATEGORIES as readonly string[]).includes(item.category) ? item.category : 'Other'
+      map.get(key)!.push(item)
+    }
+    return [...map.entries()]
+      .filter(([, list]) => list.length > 0)
+      .map(([category, list]) => ({ category, items: list }))
+  }, [filteredItems])
 
   // Reset form
   const resetForm = () => {
@@ -527,7 +541,7 @@ export default function ProductsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <div className="card-kpi gradient-blue">
           <div className="flex items-center gap-2 mb-2 text-white/80">
             <Package className="w-5 h-5" />
@@ -547,9 +561,17 @@ export default function ProductsPage() {
         <div className="card-kpi gradient-violet">
           <div className="flex items-center gap-2 mb-2 text-white/80">
             <DollarSign className="w-5 h-5" />
-            <span className="text-sm font-medium">Stock Value</span>
+            <span className="text-sm font-medium">Stock Value ($)</span>
           </div>
-          <div className="text-2xl font-bold">{fmtCurrency(stats.totalValue, 'USD')}</div>
+          <div className="text-2xl font-bold">{fmtCurrency(stats.totalUsdValue, 'USD')}</div>
+        </div>
+
+        <div className="card-kpi bg-gradient-to-br from-teal-500 to-teal-700">
+          <div className="flex items-center gap-2 mb-2 text-white/80">
+            <DollarSign className="w-5 h-5" />
+            <span className="text-sm font-medium">Stock Value (R)</span>
+          </div>
+          <div className="text-2xl font-bold">{fmtCurrency(stats.totalZarValue, 'ZAR')}</div>
         </div>
 
         <div className="card-kpi gradient-amber">
@@ -612,15 +634,22 @@ export default function ProductsPage() {
                 <th>SKU</th>
                 <th>Product Name</th>
                 <th>Category</th>
-                <th className="text-right">Price</th>
-                <th className="text-right">ZAR (calc)</th>
+                <th className="text-right">Price ($)</th>
+                <th className="text-right">Price (R)</th>
                 <th className="text-center">Qty</th>
                 <th className="text-center">Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {filteredItems.map(item => {
+              {groupedItems.map(group => (
+                <Fragment key={group.category}>
+                  <tr className="bg-slate-100">
+                    <td colSpan={8} className="text-xs font-bold uppercase tracking-wide text-slate-600">
+                      {group.category} ({group.items.length})
+                    </td>
+                  </tr>
+                  {group.items.map(item => {
                 const status = getStockStatus(item.quantity, item.reorder_point)
                 const itemCurrency = (item.currency as Currency) || 'ZAR'
                 const price = item.usd_price
@@ -655,14 +684,21 @@ export default function ProductsPage() {
                       )}
                     </td>
                     <td className="text-right">
-                      <span className="font-medium">{price ? fmtCurrency(price, itemCurrency) : '—'}</span>
-                      {itemCurrency === 'USD' && price && (
-                        <span className="text-xs text-slate-400 ml-1">USD</span>
-                      )}
+                      <span className="font-medium">
+                        {itemCurrency === 'USD' && price ? fmtCurrency(price, 'USD') : <span className="text-slate-300">—</span>}
+                      </span>
                     </td>
-                    <td className="text-right font-medium text-teal-600">
-                      {itemCurrency === 'USD' && zarPrice ? fmtCurrency(zarPrice, 'ZAR') : 
-                       itemCurrency === 'ZAR' && price ? <span className="text-slate-400 text-sm">—</span> : '—'}
+                    <td className="text-right font-medium">
+                      {itemCurrency === 'USD' && zarPrice ? (
+                        <span className="text-teal-600">
+                          {fmtCurrency(zarPrice, 'ZAR')}
+                          <span className="text-xs text-slate-400 ml-1">calc</span>
+                        </span>
+                      ) : itemCurrency === 'ZAR' && price ? (
+                        <span className="text-slate-900">{fmtCurrency(price, 'ZAR')}</span>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
                     </td>
                     <td className="text-center">
                       <span className={`font-bold text-lg ${
@@ -709,6 +745,8 @@ export default function ProductsPage() {
                   </tr>
                 )
               })}
+                </Fragment>
+              ))}
               {filteredItems.length === 0 && (
                 <tr>
                   <td colSpan={8} className="text-center py-8 text-slate-400">
