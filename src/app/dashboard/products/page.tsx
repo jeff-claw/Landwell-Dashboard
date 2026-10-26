@@ -75,13 +75,11 @@ function fmtCurrency(val: number | undefined | null, currency: Currency = 'ZAR')
   return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR' }).format(val)
 }
 
+// Plain FX conversion for stock values (dollar price × exchange rate).
+// The full markup formula lives in quotes — stock is converted, not priced up.
 function calculateZarPrice(usdPrice: number, formula: Formula | null): number {
-  if (!formula) return usdPrice * 17.5
-  const exchangeRate = formula.exchange_rate || 17.5
-  const shipping = formula.shipping_multiplier || 1.4
-  const gp = formula.gp_divisor || 0.7
-  const deliveryMult = 1 + (formula.delivery_percent || 10) / 100
-  return (usdPrice * exchangeRate * shipping * deliveryMult) / gp
+  const exchangeRate = formula?.exchange_rate || 16.5
+  return usdPrice * exchangeRate
 }
 
 export default function ProductsPage() {
@@ -152,17 +150,21 @@ export default function ProductsPage() {
     const totalQuantity = items.reduce((sum, item) => sum + (item.quantity || 0), 0)
     const lowStock = items.filter(item => getStockStatus(item.quantity, item.reorder_point) === 'low_stock').length
     const outOfStock = items.filter(item => getStockStatus(item.quantity, item.reorder_point) === 'out_of_stock').length
-    // Separate totals per currency — USD stock in $, ZAR stock in R, no conversion
+    // Stock Value ($) = USD items in dollars.
+    // Stock Value (R) = the whole stock expressed in rand: USD items converted
+    // at the formula exchange rate, ZAR items at their own price.
+    const rate = formula?.exchange_rate || 16.5
     const totalUsdValue = items.reduce((sum, item) => {
       const currency = item.currency || 'ZAR'
       return currency === 'USD' ? sum + (item.usd_price || 0) * item.quantity : sum
     }, 0)
     const totalZarValue = items.reduce((sum, item) => {
       const currency = item.currency || 'ZAR'
-      return currency === 'ZAR' ? sum + (item.usd_price || 0) * item.quantity : sum
+      const value = (item.usd_price || 0) * item.quantity
+      return sum + (currency === 'USD' ? value * rate : value)
     }, 0)
     return { totalItems, totalQuantity, lowStock, outOfStock, totalUsdValue, totalZarValue }
-  }, [items])
+  }, [items, formula])
 
   // Filter items
   const filteredItems = useMemo(() => {
