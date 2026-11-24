@@ -1041,8 +1041,8 @@ export default function WeeklyReviewPage() {
                       <div className="font-medium text-slate-800 truncate">
                         {deal.client_name || deal.title}
                       </div>
-                      {deal.value && (
-                        <div className="text-xs text-slate-500">{formatCurrency(deal.value)}</div>
+                      {deal.value_estimate && (
+                        <div className="text-xs text-slate-500">{formatCurrency(Number(deal.value_estimate) || 0)}</div>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
@@ -1285,7 +1285,7 @@ export default function WeeklyReviewPage() {
               <div className="space-y-1">
                 {actionItems.dealsToClose.slice(0, 2).map(d => (
                   <div key={d.id} className="text-xs text-slate-600 truncate">
-                    • {d.client_name} ({formatCurrency(d.value)})
+                    • {d.client_name} ({formatCurrency(Number(d.value_estimate) || 0)})
                   </div>
                 ))}
                 {actionItems.dealsToClose.length > 2 && (

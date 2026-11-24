@@ -40,14 +40,24 @@ export interface PipelineDeal {
   id: string
   client_id: string
   client_name: string
-  title: string
-  value: number
   status: string
+  // The deal's own value. The column is value_estimate, not value, and it is
+  // currently null on every row — nobody fills it in — so the pipeline works
+  // the figure out from the client's quotes instead.
+  value_estimate: number | null
+  probability: number | null
+  expected_close_date: string | null
+  quotes_status: string | null
   notes: string
   assigned_to: string
   created_by: string
   created_at: string
   updated_at: string
+  // NOT columns on the pipeline table. Several pages still read these and so
+  // always get undefined; kept optional so they compile until each one is
+  // moved over to value_estimate / client_name.
+  value?: number
+  title?: string
 }
 
 export interface QuoteLineItem {

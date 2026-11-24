@@ -350,9 +350,16 @@ export default function DashboardHome() {
       return amount // ZAR or other currencies treated as ZAR
     }
 
-    // Expected in: orders not fully paid
-    const unpaidOrders = orders.filter(o => o.status !== 'paid' && o.status !== 'cancelled')
-    const expectedIn = unpaidOrders.reduce((sum, o) => sum + (Number(o.value_zar) || 0), 0)
+    // Expected in: what is still owed on invoices — total minus what has been
+    // paid. This used to sum the full value of every order whose status was
+    // not "paid", but orders sit at "order_created" for their whole life, so
+    // it added up everything ever invoiced instead of what is still coming in.
+    const expectedIn = invoices
+      .filter(inv => inv.status !== 'cancelled')
+      .reduce((sum, inv) => {
+        const outstanding = (Number(inv.total) || 0) - (Number(inv.amount_paid) || 0)
+        return sum + (outstanding > 0 ? outstanding : 0)
+      }, 0)
 
     // Going out: supplier invoices not fully paid (converted to ZAR)
     const unpaidBills = supplierInvoices.filter(inv => {
@@ -367,7 +374,7 @@ export default function DashboardHome() {
     const net = expectedIn - goingOut
 
     return { expectedIn, goingOut, net }
-  }, [orders, supplierInvoices, usdToZarRate])
+  }, [invoices, supplierInvoices, usdToZarRate])
 
   // Top Deals data
   const topDeals = useMemo(() => {
@@ -433,8 +440,8 @@ export default function DashboardHome() {
         activities.push({
           id: `deal-${d.id}`,
           type: 'deal',
-          title: d.client_name || d.title,
-          subtitle: `${formatCompactCurrency(Number(d.value) || 0)} - ${getStageLabel(d.status)}`,
+          title: d.client_name || d.title || 'Unnamed deal',
+          subtitle: `${formatCompactCurrency(Number(d.value_estimate) || 0)} - ${getStageLabel(d.status)}`,
           timestamp: date,
           href: '/pipeline'
         })
@@ -490,22 +497,22 @@ export default function DashboardHome() {
 
     const funnelData = funnelStages.map(stage => {
       const stageDeals = pipeline.filter(d => d.status === stage.key)
-      const value = stageDeals.reduce((sum, d) => sum + (Number(d.value) || 0), 0)
+      const value = stageDeals.reduce((sum, d) => sum + (Number(d.value_estimate) || 0), 0)
       const weightedValue = value * stage.probability
       return { ...stage, count: stageDeals.length, value, weightedValue }
     })
 
     // Lost deals
     const lostDeals = pipeline.filter(d => d.status === 'closed_lost')
-    const lostValue = lostDeals.reduce((sum, d) => sum + (Number(d.value) || 0), 0)
+    const lostValue = lostDeals.reduce((sum, d) => sum + (Number(d.value_estimate) || 0), 0)
 
     // Active pipeline
     const activeDeals = pipeline.filter(d => d.status !== 'closed_won' && d.status !== 'closed_lost')
     const weightedPipeline = activeDeals.reduce((sum, d) => {
       const probability = getStageProbability(d.status)
-      return sum + ((Number(d.value) || 0) * probability)
+      return sum + ((Number(d.value_estimate) || 0) * probability)
     }, 0)
-    const totalPipeline = activeDeals.reduce((sum, d) => sum + (Number(d.value) || 0), 0)
+    const totalPipeline = activeDeals.reduce((sum, d) => sum + (Number(d.value_estimate) || 0), 0)
 
     // Alerts
     const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
@@ -834,7 +841,7 @@ export default function DashboardHome() {
                     <div className="text-sm text-soft">{deal.title !== deal.client_name ? deal.title : ''}</div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="font-bold text-strong">{formatCurrency(Number(deal.value) || 0)}</div>
+                    <div className="font-bold text-strong">{formatCurrency(Number(deal.value_estimate) || 0)}</div>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${getStageColor(deal.status)}`}>
                       {getStageLabel(deal.status)}
                     </span>
@@ -1240,7 +1247,7 @@ export default function DashboardHome() {
                     <div className="font-medium text-emerald-900 truncate">{deal.client_name || deal.title}</div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="font-bold text-emerald-800">{formatCurrency(Number(deal.value) || 0)}</div>
+                    <div className="font-bold text-emerald-800">{formatCurrency(Number(deal.value_estimate) || 0)}</div>
                     <div className="text-xs text-emerald-600">
                       {formatRelativeTime(new Date(deal.updated_at || deal.created_at))}
                     </div>

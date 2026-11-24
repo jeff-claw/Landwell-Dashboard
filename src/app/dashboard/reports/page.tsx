@@ -253,7 +253,7 @@ export default function ReportsPage() {
       })
       
       const stageDeals = pipeline.filter(d => d.status === stage.key)
-      const value = stageDeals.reduce((sum, d) => sum + (d.value || 0), 0)
+      const value = stageDeals.reduce((sum, d) => sum + (Number(d.value_estimate) || 0), 0)
       
       return {
         label: stage.label,

@@ -202,7 +202,7 @@ export default function ClientDetailPage() {
         subtitle: deal.title,
         date: new Date(deal.updated_at || deal.created_at),
         status: deal.status,
-        value: deal.value,
+        value: Number(deal.value_estimate) || 0,
         icon: 'pipeline'
       })
     })
