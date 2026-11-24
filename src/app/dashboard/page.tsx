@@ -4,7 +4,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import type { Quote, Task as TaskType, CalendarEvent, PipelineDeal, Order, Reminder, SupplierInvoice, Client, Invoice, Ticket } from '@/lib/types'
+import type { Quote, Task as TaskType, CalendarEvent, PipelineDeal, Order, Reminder, SupplierInvoice, Client, Invoice, Ticket, Formula } from '@/lib/types'
+import { deriveDeals } from '@/lib/pipeline-value'
 import { 
   TrendingUp, AlertTriangle, Clock, DollarSign, Target, 
   FileText, Users, ChevronRight, CalendarDays, CheckSquare, 
@@ -258,6 +259,7 @@ export default function DashboardHome() {
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [pipeline, setPipeline] = useState<PipelineDeal[]>([])
+  const [formula, setFormula] = useState<Formula | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
   const [tasks, setTasks] = useState<TaskType[]>([])
   const [events, setEvents] = useState<CalendarEvent[]>([])
@@ -280,7 +282,7 @@ export default function DashboardHome() {
       try {
         const supabase = createClient()
 
-        const [quotesRes, clientsRes, clientsListRes, pipelineRes, ordersRes, tasksRes, eventsRes, remindersRes, supplierInvoicesRes, invoicesRes, ticketsRes, userRes] = await Promise.all([
+        const [quotesRes, clientsRes, clientsListRes, pipelineRes, ordersRes, tasksRes, eventsRes, remindersRes, supplierInvoicesRes, invoicesRes, ticketsRes, formulaRes, userRes] = await Promise.all([
           supabase.from('quotes').select('*').order('created_at', { ascending: false }),
           supabase.from('clients').select('id', { count: 'exact', head: true }),
           supabase.from('clients').select('*').order('created_at', { ascending: false }).limit(10),
@@ -292,6 +294,7 @@ export default function DashboardHome() {
           supabase.from('supplier_invoices').select('*'),
           supabase.from('invoices').select('*').order('created_at', { ascending: false }),
           supabase.from('tickets').select('*').order('created_at', { ascending: false }),
+          supabase.from('formula').select('*').limit(1).maybeSingle(),
           supabase.auth.getUser(),
         ])
 
@@ -306,6 +309,7 @@ export default function DashboardHome() {
         setSupplierInvoices(supplierInvoicesRes.data || [])
         setInvoices(invoicesRes.data || [])
         setTickets(ticketsRes.data || [])
+        setFormula(formulaRes.data || null)
 
         if (userRes.data?.user) {
           const { data: profile } = await supabase
@@ -377,12 +381,20 @@ export default function DashboardHome() {
   }, [invoices, supplierInvoices, usdToZarRate])
 
   // Top Deals data
+  // Deal stage and value worked out from each client's quotes — the pipeline
+  // table's value_estimate is empty on every row. Shared with the Pipeline,
+  // Weekly Review, Reports and client pages so all of them agree.
+  const derivedPipeline = useMemo(
+    () => deriveDeals(pipeline, quotes, formula),
+    [pipeline, quotes, formula]
+  )
+
   const topDeals = useMemo(() => {
-    const activeDeals = pipeline.filter(d => d.status !== 'closed_won' && d.status !== 'closed_lost')
+    const activeDeals = derivedPipeline.filter(d => d.status !== 'closed_won' && d.status !== 'closed_lost')
     return activeDeals
       .sort((a, b) => (Number(b.value) || 0) - (Number(a.value) || 0))
       .slice(0, 5)
-  }, [pipeline])
+  }, [derivedPipeline])
 
   // Recent Activity feed
   const recentActivity = useMemo(() => {
@@ -434,14 +446,14 @@ export default function DashboardHome() {
     })
 
     // Recent pipeline updates
-    pipeline.slice(0, 10).forEach(d => {
+    derivedPipeline.slice(0, 10).forEach(d => {
       const date = new Date(d.updated_at || d.created_at)
       if (date >= sevenDaysAgo) {
         activities.push({
           id: `deal-${d.id}`,
           type: 'deal',
           title: d.client_name || d.title || 'Unnamed deal',
-          subtitle: `${formatCompactCurrency(Number(d.value_estimate) || 0)} - ${getStageLabel(d.status)}`,
+          subtitle: `${formatCompactCurrency(d.dealValue)} - ${getStageLabel(d.status)}`,
           timestamp: date,
           href: '/pipeline'
         })
@@ -452,16 +464,16 @@ export default function DashboardHome() {
     return activities
       .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
       .slice(0, 7)
-  }, [quotes, clients, orders, pipeline])
+  }, [quotes, clients, orders, derivedPipeline])
 
   // Quick Wins (won deals in last 30 days)
   const quickWins = useMemo(() => {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-    return pipeline
+    return derivedPipeline
       .filter(d => d.status === 'closed_won' && new Date(d.updated_at || d.created_at) >= thirtyDaysAgo)
       .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime())
       .slice(0, 5)
-  }, [pipeline])
+  }, [derivedPipeline])
 
   // Monthly stats
   const stats = useMemo(() => {
@@ -478,7 +490,7 @@ export default function DashboardHome() {
 
     // Monthly stats
     const quotesThisMonth = quotes.filter(q => new Date(q.created_at) >= startOfMonth)
-    const newLeadsThisMonth = pipeline.filter(p => new Date(p.created_at) >= startOfMonth && p.status === 'lead_generated')
+    const newLeadsThisMonth = derivedPipeline.filter(p => new Date(p.created_at) >= startOfMonth && p.status === 'lead_generated')
     const quotesWonThisMonth = quotesThisMonth.filter(q => q.status === 'accepted' || q.status === 'Accepted')
     
     // Revenue MTD
@@ -496,23 +508,23 @@ export default function DashboardHome() {
     ]
 
     const funnelData = funnelStages.map(stage => {
-      const stageDeals = pipeline.filter(d => d.status === stage.key)
-      const value = stageDeals.reduce((sum, d) => sum + (Number(d.value_estimate) || 0), 0)
+      const stageDeals = derivedPipeline.filter(d => d.status === stage.key)
+      const value = stageDeals.reduce((sum, d) => sum + (d.dealValue), 0)
       const weightedValue = value * stage.probability
       return { ...stage, count: stageDeals.length, value, weightedValue }
     })
 
     // Lost deals
-    const lostDeals = pipeline.filter(d => d.status === 'closed_lost')
-    const lostValue = lostDeals.reduce((sum, d) => sum + (Number(d.value_estimate) || 0), 0)
+    const lostDeals = derivedPipeline.filter(d => d.status === 'closed_lost')
+    const lostValue = lostDeals.reduce((sum, d) => sum + (d.dealValue), 0)
 
     // Active pipeline
-    const activeDeals = pipeline.filter(d => d.status !== 'closed_won' && d.status !== 'closed_lost')
+    const activeDeals = derivedPipeline.filter(d => d.status !== 'closed_won' && d.status !== 'closed_lost')
     const weightedPipeline = activeDeals.reduce((sum, d) => {
       const probability = getStageProbability(d.status)
-      return sum + ((Number(d.value_estimate) || 0) * probability)
+      return sum + ((d.dealValue) * probability)
     }, 0)
-    const totalPipeline = activeDeals.reduce((sum, d) => sum + (Number(d.value_estimate) || 0), 0)
+    const totalPipeline = activeDeals.reduce((sum, d) => sum + (d.dealValue), 0)
 
     // Alerts
     const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
@@ -605,7 +617,7 @@ export default function DashboardHome() {
       invoicesDueThisMonth: { count: invoicesDueThisMonth.length, amount: invoicesDueAmount },
       overdueInvoices: { count: overdueInvoices.length, amount: overdueInvoicesAmount },
     }
-  }, [quotes, pipeline, orders, tasks, clientsCount, supplierInvoices, invoices, usdToZarRate])
+  }, [quotes, derivedPipeline, orders, tasks, clientsCount, supplierInvoices, invoices, usdToZarRate])
 
   const firstName = profileName ? profileName.split(' ')[0] : 'there'
 
@@ -841,7 +853,7 @@ export default function DashboardHome() {
                     <div className="text-sm text-soft">{deal.title !== deal.client_name ? deal.title : ''}</div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="font-bold text-strong">{formatCurrency(Number(deal.value_estimate) || 0)}</div>
+                    <div className="font-bold text-strong">{formatCurrency(deal.dealValue)}</div>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${getStageColor(deal.status)}`}>
                       {getStageLabel(deal.status)}
                     </span>
@@ -1247,7 +1259,7 @@ export default function DashboardHome() {
                     <div className="font-medium text-emerald-900 truncate">{deal.client_name || deal.title}</div>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <div className="font-bold text-emerald-800">{formatCurrency(Number(deal.value_estimate) || 0)}</div>
+                    <div className="font-bold text-emerald-800">{formatCurrency(deal.dealValue)}</div>
                     <div className="text-xs text-emerald-600">
                       {formatRelativeTime(new Date(deal.updated_at || deal.created_at))}
                     </div>

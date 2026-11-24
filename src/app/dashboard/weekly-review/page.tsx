@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { deriveDeals } from '@/lib/pipeline-value'
 import type { Quote, PipelineDeal, OrderWithShipping, Task, Formula } from '@/lib/types'
 import { 
   CalendarDays, 
@@ -445,12 +446,19 @@ export default function WeeklyReviewPage() {
     })
   }, [])
 
+  // Deal values come from each client's quotes; the pipeline table's
+  // value_estimate is empty on every row.
+  const derivedPipeline = useMemo(
+    () => deriveDeals(pipeline, quotes, formula),
+    [pipeline, quotes, formula]
+  )
+
   // This Week's Stats
   const thisWeekStats = useMemo(() => {
     const thisWeekQuotes = filterByDateRange(quotes, weekStart, weekEnd)
     const thisWeekOrders = filterByDateRange(orders, weekStart, weekEnd)
     const thisWeekClients = filterByDateRange(clients, weekStart, weekEnd)
-    const thisWeekPipelineUpdates = filterByUpdatedDateRange(pipeline, weekStart, weekEnd)
+    const thisWeekPipelineUpdates = filterByUpdatedDateRange(derivedPipeline, weekStart, weekEnd)
 
     // Quotes stats
     const quotesSent = thisWeekQuotes.filter(q => q.status === 'sent' || q.status === 'Sent' || q.status === 'accepted' || q.status === 'Accepted' || q.status === 'declined' || q.status === 'Declined')
@@ -468,10 +476,10 @@ export default function WeeklyReviewPage() {
 
     // Demo tracking
     // Active demos = pipeline entries currently in 'demo' stage
-    const demosActive = pipeline.filter(p => p.status === 'demo')
+    const demosActive = derivedPipeline.filter(p => p.status === 'demo')
     
     // Demos completed this week = deals that moved FROM demo TO a later stage (po_received, won) this week
-    const demosCompleted = pipeline.filter(p => {
+    const demosCompleted = derivedPipeline.filter(p => {
       const updatedDate = new Date(p.updated_at || p.created_at)
       const isThisWeek = updatedDate >= weekStart && updatedDate <= weekEnd
       const isCompletedStage = ['po_received', 'won', 'closed_won'].includes(p.status)
@@ -495,7 +503,7 @@ export default function WeeklyReviewPage() {
       demosActive: demosActive.length,
       demosCompleted: demosCompleted.length,
     }
-  }, [quotes, orders, clients, pipeline, weekStart, weekEnd, formula, filterByDateRange, filterByUpdatedDateRange])
+  }, [quotes, orders, clients, derivedPipeline, weekStart, weekEnd, formula, filterByDateRange, filterByUpdatedDateRange])
 
   // Last Week's Stats (for comparison)
   const lastWeekStats = useMemo(() => {
@@ -514,7 +522,7 @@ export default function WeeklyReviewPage() {
 
     // Demo tracking for last week (for comparison)
     // Demos completed last week = deals that moved to po_received/won/closed_won last week
-    const lastWeekDemosCompleted = pipeline.filter(p => {
+    const lastWeekDemosCompleted = derivedPipeline.filter(p => {
       const updatedDate = new Date(p.updated_at || p.created_at)
       const isLastWeek = updatedDate >= lastWeekStart && updatedDate <= lastWeekEnd
       const isCompletedStage = ['po_received', 'won', 'closed_won'].includes(p.status)
@@ -530,15 +538,15 @@ export default function WeeklyReviewPage() {
       revenue,
       demosCompleted: lastWeekDemosCompleted.length,
     }
-  }, [quotes, orders, clients, pipeline, lastWeekStart, lastWeekEnd, filterByDateRange])
+  }, [quotes, orders, clients, derivedPipeline, lastWeekStart, lastWeekEnd, filterByDateRange])
 
   // Demos This Week
   const demosThisWeek = useMemo(() => {
     // Active demos (currently in demo stage)
-    const active = pipeline.filter(p => p.status === 'demo')
+    const active = derivedPipeline.filter(p => p.status === 'demo')
     
     // Demos completed this week (moved to po_received or won)
-    const completed = pipeline.filter(p => {
+    const completed = derivedPipeline.filter(p => {
       const updatedDate = new Date(p.updated_at || p.created_at)
       const isThisWeek = updatedDate >= weekStart && updatedDate <= weekEnd
       const isCompletedStage = ['po_received', 'won', 'closed_won'].includes(p.status)
@@ -563,7 +571,7 @@ export default function WeeklyReviewPage() {
       wonCount: completed.filter(d => d.outcome === 'won').length,
       poReceivedCount: completed.filter(d => d.outcome === 'po_received').length,
     }
-  }, [pipeline, weekStart, weekEnd])
+  }, [derivedPipeline, weekStart, weekEnd])
 
   // Pipeline Movement
   const pipelineMovement = useMemo(() => {
@@ -571,10 +579,10 @@ export default function WeeklyReviewPage() {
     const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
     
     // Active deals (exclude closed)
-    const activeDeals = pipeline.filter(d => d.status !== 'closed_won' && d.status !== 'closed_lost')
+    const activeDeals = derivedPipeline.filter(d => d.status !== 'closed_won' && d.status !== 'closed_lost')
     
     // Deals that moved forward this week (updated within week range)
-    const movedForward = pipeline.filter(p => {
+    const movedForward = derivedPipeline.filter(p => {
       const updatedDate = new Date(p.updated_at || p.created_at)
       const createdDate = new Date(p.created_at)
       return updatedDate >= weekStart && updatedDate <= weekEnd && updatedDate.getTime() !== createdDate.getTime()
@@ -587,7 +595,7 @@ export default function WeeklyReviewPage() {
     })
     
     // New opportunities (created this week)
-    const newOpportunities = pipeline.filter(p => {
+    const newOpportunities = derivedPipeline.filter(p => {
       const createdDate = new Date(p.created_at)
       return createdDate >= weekStart && createdDate <= weekEnd
     })
@@ -602,7 +610,7 @@ export default function WeeklyReviewPage() {
       newOpportunities,
       expectedToClose,
     }
-  }, [pipeline, weekStart, weekEnd])
+  }, [derivedPipeline, weekStart, weekEnd])
 
   // Quote Activity
   const quoteActivity = useMemo(() => {
@@ -659,7 +667,7 @@ export default function WeeklyReviewPage() {
     })
 
     // Stale pipeline deals
-    const activeDeals = pipeline.filter(d => d.status !== 'closed_won' && d.status !== 'closed_lost')
+    const activeDeals = derivedPipeline.filter(d => d.status !== 'closed_won' && d.status !== 'closed_lost')
     const staleDeals = activeDeals.filter(d => {
       const lastUpdate = new Date(d.updated_at || d.created_at)
       return lastUpdate < fourteenDaysAgo
@@ -681,7 +689,7 @@ export default function WeeklyReviewPage() {
       dealsToClose,
       overdueTasks,
     }
-  }, [quotes, pipeline, tasks])
+  }, [quotes, derivedPipeline, tasks])
 
   // Top Products
   const topProducts = useMemo(() => {
@@ -1041,8 +1049,8 @@ export default function WeeklyReviewPage() {
                       <div className="font-medium text-slate-800 truncate">
                         {deal.client_name || deal.title}
                       </div>
-                      {deal.value_estimate && (
-                        <div className="text-xs text-slate-500">{formatCurrency(Number(deal.value_estimate) || 0)}</div>
+                      {deal.dealValue > 0 && (
+                        <div className="text-xs text-slate-500">{formatCurrency(deal.dealValue)}</div>
                       )}
                     </div>
                     <div className="flex items-center gap-2">
@@ -1285,7 +1293,7 @@ export default function WeeklyReviewPage() {
               <div className="space-y-1">
                 {actionItems.dealsToClose.slice(0, 2).map(d => (
                   <div key={d.id} className="text-xs text-slate-600 truncate">
-                    • {d.client_name} ({formatCurrency(Number(d.value_estimate) || 0)})
+                    • {d.client_name} ({formatCurrency(d.dealValue)})
                   </div>
                 ))}
                 {actionItems.dealsToClose.length > 2 && (

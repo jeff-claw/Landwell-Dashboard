@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { deriveDeals } from '@/lib/pipeline-value'
 import Link from 'next/link'
 import type { Client, Quote, Order, PipelineDeal, Formula, Ticket } from '@/lib/types'
 import { TICKET_STATUS_CONFIG, TICKET_PRIORITY_CONFIG } from '@/lib/types'
@@ -149,6 +150,13 @@ export default function ClientDetailPage() {
     }
   }, [clientId, router])
 
+  // Deal values come from the client's quotes; the pipeline table's
+  // value_estimate is empty on every row.
+  const derivedPipeline = useMemo(
+    () => deriveDeals(pipeline, quotes, formula),
+    [pipeline, quotes, formula]
+  )
+
   // Build activity timeline
   const timeline = useMemo((): TimelineEvent[] => {
     if (!client) return []
@@ -194,7 +202,7 @@ export default function ClientDetailPage() {
     })
 
     // Pipeline status changes (using updated_at as proxy)
-    pipeline.forEach(deal => {
+    derivedPipeline.forEach(deal => {
       events.push({
         id: `pipeline-${deal.id}`,
         type: 'pipeline',
@@ -202,14 +210,14 @@ export default function ClientDetailPage() {
         subtitle: deal.title,
         date: new Date(deal.updated_at || deal.created_at),
         status: deal.status,
-        value: Number(deal.value_estimate) || 0,
+        value: deal.dealValue,
         icon: 'pipeline'
       })
     })
 
     // Sort by date descending
     return events.sort((a, b) => b.date.getTime() - a.date.getTime())
-  }, [client, quotes, orders, pipeline, formula])
+  }, [client, quotes, orders, derivedPipeline, formula])
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -248,9 +256,9 @@ export default function ClientDetailPage() {
       totalOrders,
       daysSinceActivity,
       winRate,
-      pipelineStatus: pipeline[0]?.status || null
+      pipelineStatus: derivedPipeline[0]?.status || null
     }
-  }, [client, quotes, orders, pipeline, timeline, formula])
+  }, [client, quotes, orders, derivedPipeline, timeline, formula])
 
   const getStatusColor = (status: string) => {
     const s = status?.toLowerCase()

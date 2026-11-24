@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Quote, Order, PipelineDeal, Client } from '@/lib/types'
+import type { Quote, Order, PipelineDeal, Client, Formula } from '@/lib/types'
+import { deriveDeals } from '@/lib/pipeline-value'
 import { BarChart2, TrendingUp, Users, MapPin, Package, ArrowRight } from 'lucide-react'
 
 function formatCurrency(val: number) {
@@ -105,23 +106,26 @@ export default function ReportsPage() {
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [orders, setOrders] = useState<Order[]>([])
   const [pipeline, setPipeline] = useState<PipelineDeal[]>([])
+  const [formula, setFormula] = useState<Formula | null>(null)
   const [clients, setClients] = useState<Client[]>([])
   const [loading, setLoading] = useState(true)
 
   const supabase = createClient()
 
   const fetchAll = useCallback(async () => {
-    const [quotesRes, ordersRes, pipelineRes, clientsRes] = await Promise.all([
+    const [quotesRes, ordersRes, pipelineRes, clientsRes, formulaRes] = await Promise.all([
       supabase.from('quotes').select('*'),
       supabase.from('orders').select('*'),
       supabase.from('pipeline').select('*'),
       supabase.from('clients').select('*'),
+      supabase.from('formula').select('*').limit(1).maybeSingle(),
     ])
     
     setQuotes(quotesRes.data || [])
     setOrders(ordersRes.data || [])
     setPipeline(pipelineRes.data || [])
     setClients(clientsRes.data || [])
+    setFormula(formulaRes.data || null)
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -129,6 +133,13 @@ export default function ReportsPage() {
   useEffect(() => { fetchAll() }, [fetchAll])
 
   // Sales by product (from quote line items)
+  // Deal values come from each client's quotes; the pipeline table's
+  // value_estimate is empty on every row.
+  const derivedPipeline = useMemo(
+    () => deriveDeals(pipeline, quotes, formula),
+    [pipeline, quotes, formula]
+  )
+
   const salesByProduct = useMemo(() => {
     const productMap = new Map<string, { quoted: number; sold: number }>()
     
@@ -247,13 +258,13 @@ export default function ReportsPage() {
     // For simplicity, use current status as the furthest stage reached
     const stageCounts = stages.map(stage => {
       const stageIndex = stages.findIndex(s => s.key === stage.key)
-      const deals = pipeline.filter(deal => {
+      const deals = derivedPipeline.filter(deal => {
         const dealIndex = stages.findIndex(s => s.key === deal.status)
         return dealIndex >= stageIndex || deal.status === 'closed_lost'
       })
       
-      const stageDeals = pipeline.filter(d => d.status === stage.key)
-      const value = stageDeals.reduce((sum, d) => sum + (Number(d.value_estimate) || 0), 0)
+      const stageDeals = derivedPipeline.filter(d => d.status === stage.key)
+      const value = stageDeals.reduce((sum, d) => sum + d.dealValue, 0)
       
       return {
         label: stage.label,
@@ -264,7 +275,7 @@ export default function ReportsPage() {
     })
 
     return stageCounts
-  }, [pipeline])
+  }, [derivedPipeline])
 
   // Summary stats
   const summary = useMemo(() => {

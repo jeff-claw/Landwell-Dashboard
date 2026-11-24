@@ -5,46 +5,9 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { PipelineDeal, PipelineStatus, Quote, Client, Formula } from '@/lib/types'
 import { Plus, X, ChevronDown, ChevronRight, Search, Expand, Shrink, User, FileText, ExternalLink, Calendar, DollarSign, Mail, Phone, Clock, AlertTriangle, TrendingUp } from 'lucide-react'
+import { calculateZarPrice, getStageProbability, quoteState, quoteValueZar, deriveDeals } from '@/lib/pipeline-value'
 
-// Calculate ZAR price from USD using formula
-function calculateZarPrice(
-  usdPrice: number,
-  clientType: string,
-  formula: Formula | null,
-  region: string | null = null,
-  includeInstallation: boolean = false
-): number {
-  if (!formula) return usdPrice * 17.5
-  const exchangeRate = Number(formula.exchange_rate) || 17.5
-  const shipping = Number(formula.shipping_multiplier) || 1.4
-  const gp = Number(formula.gp_divisor) || 0.7
-  const endUserDivisor = Number(formula.end_user_divisor) || 0.75
-  const deliveryMult = 1 + (Number(formula.delivery_percent) || 10) / 100
-  const regionMult = (region && formula.region_markups?.[region]) ? 1 + formula.region_markups[region] / 100 : 1
 
-  const resellerNoInstall = (usdPrice * exchangeRate * shipping * deliveryMult) / gp
-  const resellerWithInstall = (usdPrice * exchangeRate * shipping * deliveryMult * regionMult) / gp
-
-  if (clientType === 'end_user' || clientType === 'End User') {
-    return resellerWithInstall / endUserDivisor
-  }
-  return includeInstallation ? resellerWithInstall : resellerNoInstall
-}
-
-// Get probability based on pipeline status
-function getStageProbability(status: string): number {
-  const probabilities: Record<string, number> = {
-    'lead_generated': 0.1,
-    'qualification': 0.2,
-    'meeting_scheduled': 0.3,
-    'demo': 0.5,
-    'proposal_sent': 0.6,
-    'po_received': 0.9,
-    'closed_won': 1.0,
-    'closed_lost': 0,
-  }
-  return probabilities[status] ?? 0.2
-}
 
 function daysBetween(date1: Date, date2: Date): number {
   const diff = date2.getTime() - date1.getTime()
@@ -66,38 +29,6 @@ const STAGES: { key: PipelineStatus; label: string; color: string; borderColor: 
 ]
 
 const DEALS_PER_COLUMN = 10 // Limit for display per column
-
-// Quote statuses as the quotes table actually stores them. The old checks
-// looked for 'approved'/'Accepted', which never matched 'accepted', so an
-// accepted quote never registered and its deal stayed sitting in New Lead.
-const ACCEPTED_QUOTE = ['accepted', 'approved', 'won']
-const LOST_QUOTE = ['declined', 'rejected', 'lost']
-const SENT_QUOTE = ['sent', 'quoted']
-
-function quoteState(status: string | null | undefined): 'accepted' | 'lost' | 'sent' | 'draft' {
-  const s = (status || '').trim().toLowerCase()
-  if (ACCEPTED_QUOTE.includes(s)) return 'accepted'
-  if (LOST_QUOTE.includes(s)) return 'lost'
-  if (SENT_QUOTE.includes(s)) return 'sent'
-  return 'draft'
-}
-
-// Quote totals are not stored — `total` is 0 on every row — so the value has
-// to be rebuilt from the line items, converting USD through the pricing
-// formula exactly as the Quotes page does.
-function quoteValueZar(quote: Quote, formula: Formula | null): number {
-  return quote.line_items?.reduce((sum, item) => {
-    // Each line carries its own currency. A USD quote routinely holds ZAR
-    // lines (software, seals); running those through the USD formula
-    // multiplied them by about fifty and blew the pipeline total up to
-    // hundreds of millions.
-    const itemCurrency = (item as { currency?: string }).currency || quote.currency
-    const price = itemCurrency === 'USD'
-      ? calculateZarPrice(item.unitPrice, quote.client_type || 'end_user', formula, quote.region, quote.include_installation)
-      : item.unitPrice
-    return sum + (item.qty * price)
-  }, 0) || 0
-}
 
 const emptyDeal = { title: '', value: 0, status: 'lead_generated' as PipelineStatus, client_id: '', notes: '' }
 
@@ -486,64 +417,12 @@ export default function PipelinePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Each deal's stage and value, worked out from that client's quotes. The
-  // pipeline table's own value_estimate is empty on every row and nothing
-  // ever moved a deal when its quote was accepted or declined, so both were
-  // read straight off the quotes instead.
-  //
-  // A stage set by hand still wins: only deals left at the default New Lead
-  // are moved, so dragging a card somewhere is not undone on the next load.
-  const dealsWithQuotes = useMemo(() => {
-    const byClient = new Map<string, Quote[]>()
-    quotes.forEach(q => {
-      const key = (q.client_name || '').trim().toLowerCase()
-      if (!key) return
-      byClient.set(key, [...(byClient.get(key) || []), q])
-    })
-
-    // The first deal listed for each client is the one that carries that
-    // client's quote value; the rest count as zero so nothing is doubled.
-    const firstDealPerClient = new Map<string, string>()
-    deals.forEach(d => {
-      const key = (d.client_name || '').trim().toLowerCase()
-      if (key && !firstDealPerClient.has(key)) firstDealPerClient.set(key, d.id)
-    })
-
-    return deals.map(deal => {
-      const clientQuotes = byClient.get((deal.client_name || '').trim().toLowerCase()) || []
-      const states = clientQuotes.map(q => quoteState(q.status))
-
-      let derivedStatus = deal.status
-      if (deal.status === 'lead_generated' && clientQuotes.length > 0) {
-        if (states.includes('accepted')) derivedStatus = 'po_received'
-        else if (states.includes('sent')) derivedStatus = 'proposal_sent'
-        else if (states.length > 0 && states.every(s => s === 'lost')) derivedStatus = 'closed_lost'
-      }
-
-      // Value follows the live quotes: the accepted ones once there are any,
-      // otherwise everything still in play. A hand-entered estimate wins.
-      const relevant = states.includes('accepted')
-        ? clientQuotes.filter(q => quoteState(q.status) === 'accepted')
-        : clientQuotes.filter(q => quoteState(q.status) !== 'lost' && quoteState(q.status) !== 'draft')
-
-      // A client can hold several pipeline rows (Eskom has four). The quote
-      // value belongs to the client, so it is credited to one deal only —
-      // otherwise the same money is counted once per row.
-      const clientKey = (deal.client_name || '').trim().toLowerCase()
-      const ownsValue = !clientKey || firstDealPerClient.get(clientKey) === deal.id
-      const quoteValue = ownsValue
-        ? relevant.reduce((sum, q) => sum + quoteValueZar(q, formula), 0)
-        : 0
-
-      return {
-        ...deal,
-        status: derivedStatus,
-        derivedFromQuotes: derivedStatus !== deal.status,
-        quoteCount: clientQuotes.length,
-        dealValue: Number(deal.value_estimate) || quoteValue,
-      }
-    })
-  }, [deals, quotes, formula])
+  // Stage and value come from the client's quotes, shared with the dashboard,
+  // weekly review, reports and client pages so every screen agrees.
+  const dealsWithQuotes = useMemo(
+    () => deriveDeals(deals, quotes, formula),
+    [deals, quotes, formula]
+  )
 
   // Filter deals by search query — over the quote-derived list, so the board
   // columns and the search agree with the stages shown.
