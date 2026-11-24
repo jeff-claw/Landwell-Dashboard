@@ -573,7 +573,10 @@ export default function OrdersPage() {
       groups[stage.key] = []
     })
     
-    filteredOrders.forEach(order => {
+    // Invoice-only orders are left out of the stage counts even while the
+    // list is showing them, otherwise revealing them puts 15 orders that
+    // never shipped back into "Pending".
+    filteredOrders.filter(o => !isInvoiceOnly(o)).forEach(order => {
       const status = order.shipment_status || 'pending'
       if (groups[status]) {
         groups[status].push(order)
