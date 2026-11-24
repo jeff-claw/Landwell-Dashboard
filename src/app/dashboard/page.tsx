@@ -288,7 +288,7 @@ export default function DashboardHome() {
           supabase.from('clients').select('*').order('created_at', { ascending: false }).limit(10),
           supabase.from('pipeline').select('*').order('updated_at', { ascending: false }),
           supabase.from('orders').select('*').order('created_at', { ascending: false }),
-          supabase.from('tasks').select('*').eq('completed', false),
+          supabase.from('tasks').select('*').neq('status', 'done'),
           supabase.from('calendar_events').select('*'),
           supabase.from('reminders').select('*').eq('status', 'pending'),
           supabase.from('supplier_invoices').select('*'),
@@ -332,13 +332,21 @@ export default function DashboardHome() {
   // Today's data
   const todayData = useMemo(() => {
     const todayTasks = tasks.filter(t => t.due_date === todayStr)
-    const todayEvents = events.filter(e => e.date === todayStr)
+    // start_date is a timestamp; there is no `date` column, which is why
+    // "Events today" was always empty.
+    const todayEvents = events.filter(e => e.start_date?.slice(0, 10) === todayStr)
     const todayReminders = reminders.filter(r => r.due_date === todayStr)
     const expiringQuotes = quotes.filter(q => q.due_date === todayStr && (q.status === 'sent' || q.status === 'Sent'))
 
     return {
       tasks: todayTasks.map(t => ({ id: t.id, label: t.title, sublabel: t.client_name || undefined })),
-      events: todayEvents.map(e => ({ id: e.id, label: e.title, sublabel: e.start_time ? `${e.start_time}${e.client_name ? ` • ${e.client_name}` : ''}` : undefined })),
+      events: todayEvents.map(e => ({
+        id: e.id,
+        label: e.title,
+        sublabel: e.all_day
+          ? 'All day'
+          : new Date(e.start_date).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' }),
+      })),
       reminders: todayReminders.map(r => ({ id: r.id, label: r.title, sublabel: r.description?.slice(0, 50) || undefined })),
       quotes: expiringQuotes.map(q => ({ id: q.id, label: q.quote_number, sublabel: q.client_name })),
     }
@@ -542,7 +550,7 @@ export default function DashboardHome() {
     })
 
     const overdueTasks = tasks.filter(t => {
-      if (t.completed) return false
+      if (t.status === 'done') return false
       if (!t.due_date) return false
       return new Date(t.due_date) < now
     })

@@ -7,14 +7,14 @@ import { Plus, X, ChevronLeft, ChevronRight, Clock, Trash2, Download } from 'luc
 import { toast } from 'sonner'
 
 // Generate .ics file content for calendar export
-function generateICS(event: { title: string; description?: string; start_time: string; end_time?: string }): string {
+function generateICS(event: { title: string; description?: string; start_date: string; end_date?: string }): string {
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr)
     return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
   }
   
-  const start = formatDate(event.start_time)
-  const end = event.end_time ? formatDate(event.end_time) : formatDate(new Date(new Date(event.start_time).getTime() + 60 * 60 * 1000).toISOString())
+  const start = formatDate(event.start_date)
+  const end = event.end_date ? formatDate(event.end_date) : formatDate(new Date(new Date(event.start_date).getTime() + 60 * 60 * 1000).toISOString())
   const now = formatDate(new Date().toISOString())
   const uid = `${Date.now()}@landwellafrica.co.za`
   
@@ -32,7 +32,7 @@ END:VEVENT
 END:VCALENDAR`
 }
 
-function downloadICS(event: { title: string; description?: string; start_time: string; end_time?: string }) {
+function downloadICS(event: { title: string; description?: string; start_date: string; end_date?: string }) {
   const icsContent = generateICS(event)
   const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' })
   const url = URL.createObjectURL(blob)
@@ -60,8 +60,8 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 interface EventForm {
   title: string
   description: string
-  start_time: string
-  end_time: string
+  start_date: string
+  end_date: string
   event_type: string
   client_id: string
 }
@@ -72,8 +72,8 @@ const getEmptyForm = (date?: Date): EventForm => {
   return {
     title: '',
     description: '',
-    start_time: `${dateStr}T09:00`,
-    end_time: `${dateStr}T10:00`,
+    start_date: `${dateStr}T09:00`,
+    end_date: `${dateStr}T10:00`,
     event_type: 'meeting',
     client_id: '',
   }
@@ -92,7 +92,7 @@ export default function CalendarPage() {
   const supabase = createClient()
 
   const fetchEvents = async () => {
-    const { data } = await supabase.from('calendar_events').select('*').order('start_time', { ascending: true })
+    const { data } = await supabase.from('calendar_events').select('*').order('start_date', { ascending: true })
     setEvents(data || [])
     setLoading(false)
   }
@@ -148,9 +148,9 @@ export default function CalendarPage() {
     const localDateStr = `${year}-${month}-${day}`
     
     return events.filter(e => {
-      if (!e.start_time) return false
+      if (!e.start_date) return false
       // Parse the event date and compare using local date
-      const eventDate = new Date(e.start_time)
+      const eventDate = new Date(e.start_date)
       const eventYear = eventDate.getFullYear()
       const eventMonth = String(eventDate.getMonth() + 1).padStart(2, '0')
       const eventDay = String(eventDate.getDate()).padStart(2, '0')
@@ -178,10 +178,10 @@ export default function CalendarPage() {
     setForm({
       title: event.title || '',
       description: event.description || '',
-      start_time: event.start_time?.slice(0, 16) || '',
-      end_time: event.end_time?.slice(0, 16) || '',
+      start_date: event.start_date?.slice(0, 16) || '',
+      end_date: event.end_date?.slice(0, 16) || '',
       event_type: event.event_type || 'meeting',
-      client_id: event.client_id || '',
+      client_id: event.related_client_id || '',
     })
     setShowForm(true)
   }
@@ -199,10 +199,11 @@ export default function CalendarPage() {
     const eventData = {
       title: form.title,
       description: form.description || null,
-      start_time: form.start_time,
-      end_time: form.end_time || null,
+      start_date: form.start_date,
+      end_date: form.end_date || null,
       event_type: form.event_type,
-      client_id: form.client_id || null,
+      // The column is related_client_id; writing client_id made every save fail.
+      related_client_id: form.client_id || null,
     }
 
     if (editingEvent) {
@@ -364,7 +365,7 @@ export default function CalendarPage() {
         <h3 className="text-lg font-semibold text-slate-900 mb-4">Upcoming Events</h3>
         <div className="space-y-3">
           {events
-            .filter(e => new Date(e.start_time) >= new Date())
+            .filter(e => new Date(e.start_date) >= new Date())
             .slice(0, 5)
             .map(event => {
               const colors = EVENT_COLORS[event.event_type] || EVENT_COLORS.other
@@ -379,9 +380,9 @@ export default function CalendarPage() {
                     <p className="font-medium text-sm text-slate-900 truncate">{event.title}</p>
                     <div className="flex items-center gap-2 mt-1 text-xs text-slate-500">
                       <Clock className="w-3 h-3" />
-                      {new Date(event.start_time).toLocaleDateString('en-ZA', { weekday: 'short', month: 'short', day: 'numeric' })}
+                      {new Date(event.start_date).toLocaleDateString('en-ZA', { weekday: 'short', month: 'short', day: 'numeric' })}
                       {' · '}
-                      {new Date(event.start_time).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(event.start_date).toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </div>
                   <button
@@ -390,8 +391,8 @@ export default function CalendarPage() {
                       downloadICS({
                         title: event.title,
                         description: event.description,
-                        start_time: event.start_time,
-                        end_time: event.end_time,
+                        start_date: event.start_date,
+                        end_date: event.end_date || undefined,
                       })
                     }}
                     className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
@@ -402,7 +403,7 @@ export default function CalendarPage() {
                 </div>
               )
             })}
-          {events.filter(e => new Date(e.start_time) >= new Date()).length === 0 && (
+          {events.filter(e => new Date(e.start_date) >= new Date()).length === 0 && (
             <p className="text-sm text-slate-400 text-center py-4">No upcoming events</p>
           )}
         </div>
@@ -439,8 +440,8 @@ export default function CalendarPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Start</label>
                   <input
                     type="datetime-local"
-                    value={form.start_time}
-                    onChange={e => setForm({ ...form, start_time: e.target.value })}
+                    value={form.start_date}
+                    onChange={e => setForm({ ...form, start_date: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
@@ -448,8 +449,8 @@ export default function CalendarPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">End</label>
                   <input
                     type="datetime-local"
-                    value={form.end_time}
-                    onChange={e => setForm({ ...form, end_time: e.target.value })}
+                    value={form.end_date}
+                    onChange={e => setForm({ ...form, end_date: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
                   />
                 </div>
@@ -513,8 +514,8 @@ export default function CalendarPage() {
                         onClick={() => downloadICS({
                           title: form.title,
                           description: form.description,
-                          start_time: form.start_time,
-                          end_time: form.end_time,
+                          start_date: form.start_date,
+                          end_date: form.end_date,
                         })}
                         className="flex items-center gap-2 px-3 py-2 text-blue-600 hover:bg-blue-50 rounded-lg text-sm font-medium transition"
                       >

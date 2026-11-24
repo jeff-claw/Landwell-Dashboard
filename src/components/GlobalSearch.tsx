@@ -158,16 +158,16 @@ export default function GlobalSearch({ variant = 'default' }: GlobalSearchProps)
       // Search Pipeline Deals
       const { data: deals } = await supabase
         .from('pipeline')
-        .select('id, title, client_name, value, status')
-        .or(`title.ilike.%${q}%,client_name.ilike.%${q}%`)
+        .select('id, client_name, value_estimate, status')
+        .ilike('client_name', `%${q}%`)
         .limit(5)
 
       deals?.forEach(d => {
         searchResults.push({
           id: d.id,
           type: 'deal',
-          title: d.client_name || d.title,
-          subtitle: `${d.title} • ${formatCurrency(d.value || 0)}`,
+          title: d.client_name || 'Unnamed deal',
+          subtitle: d.value_estimate ? formatCurrency(Number(d.value_estimate)) : d.status,
           href: '/pipeline'
         })
       })
@@ -175,7 +175,7 @@ export default function GlobalSearch({ variant = 'default' }: GlobalSearchProps)
       // Search Tasks
       const { data: tasks } = await supabase
         .from('tasks')
-        .select('id, title, client_name')
+        .select('id, title, status')
         .ilike('title', `%${q}%`)
         .limit(5)
 
@@ -184,7 +184,7 @@ export default function GlobalSearch({ variant = 'default' }: GlobalSearchProps)
           id: t.id,
           type: 'task',
           title: t.title,
-          subtitle: t.client_name || undefined,
+          subtitle: t.status || undefined,
           href: '/tasks'
         })
       })
@@ -192,16 +192,16 @@ export default function GlobalSearch({ variant = 'default' }: GlobalSearchProps)
       // Search Products/Pricelist
       const { data: products } = await supabase
         .from('pricelist')
-        .select('id, name, sku, sell_price_zar')
-        .or(`name.ilike.%${q}%,sku.ilike.%${q}%`)
+        .select('id, product_name, category, usd_price')
+        .or(`product_name.ilike.%${q}%,category.ilike.%${q}%`)
         .limit(5)
 
       products?.forEach(p => {
         searchResults.push({
           id: p.id,
           type: 'product',
-          title: p.name,
-          subtitle: `${p.sku || 'No SKU'} • ${formatCurrency(p.sell_price_zar || 0)}`,
+          title: p.product_name,
+          subtitle: `${p.category || 'Uncategorised'} • $${Number(p.usd_price || 0).toLocaleString('en-ZA')}`,
           href: '/pricelist'
         })
       })
@@ -226,8 +226,8 @@ export default function GlobalSearch({ variant = 'default' }: GlobalSearchProps)
       // Search Suppliers
       const { data: suppliers } = await supabase
         .from('suppliers')
-        .select('id, name, contact_person, email')
-        .or(`name.ilike.%${q}%,contact_person.ilike.%${q}%`)
+        .select('id, name, contact_name, email')
+        .or(`name.ilike.%${q}%,contact_name.ilike.%${q}%`)
         .limit(5)
 
       suppliers?.forEach(s => {
@@ -235,7 +235,7 @@ export default function GlobalSearch({ variant = 'default' }: GlobalSearchProps)
           id: s.id,
           type: 'supplier',
           title: s.name,
-          subtitle: s.contact_person || s.email,
+          subtitle: s.contact_name || s.email,
           href: '/accounts-payable'
         })
       })

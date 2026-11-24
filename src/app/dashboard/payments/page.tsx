@@ -184,10 +184,13 @@ export default function PaymentsPage() {
 
     // Audit row. The invoice is identified by its number in the reference,
     // because the payments table has no invoice_id column.
+    // payments has no client_name column — the client is referenced by id.
+    // Writing one is what kept every Record Payment failing.
+    const { data: { user } } = await supabase.auth.getUser()
     const { error: paymentError } = await supabase.from('payments').insert({
       order_id: invoice.order_id,
       client_id: invoice.client_id,
-      client_name: invoice.client_name,
+      recorded_by: user?.id || null,
       amount,
       payment_date: paymentDate,
       payment_method: paymentMethod,
@@ -402,7 +405,9 @@ export default function PaymentsPage() {
                     <DollarSign className="w-5 h-5 text-emerald-600" />
                   </div>
                   <div>
-                    <div className="font-medium text-slate-800">{payment.client_name || 'Unknown'}</div>
+                    <div className="font-medium text-slate-800">
+                      {invoices.find(i => i.client_id && i.client_id === payment.client_id)?.client_name || 'Unknown client'}
+                    </div>
                     <div className="text-sm text-slate-500">
                       {payment.payment_method?.replace('_', ' ')} • {payment.reference || 'No ref'}
                     </div>

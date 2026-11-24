@@ -146,14 +146,19 @@ export interface CalendarEvent {
   id: string
   title: string
   description: string
-  date: string
-  start_time: string
-  end_time: string
   event_type: string
-  client_id: string
-  client_name: string
-  created_by: string
-  teams_link: string
+  // Timestamps, not dates — they carry the time of day. The old start_time /
+  // end_time / date fields were never columns, so the calendar could not read
+  // a single one of its events.
+  start_date: string
+  end_date: string | null
+  all_day: boolean
+  location: string | null
+  related_client_id: string | null
+  related_tender_id: string | null
+  teams_link: string | null
+  color: string | null
+  created_by: string | null
   created_at: string
   updated_at: string
 }
@@ -192,15 +197,16 @@ export interface PaymentRecord {
   // invoice's client; order_id remains for older order-linked rows.
   order_id: string | null
   client_id: string | null
-  client_name: string
   amount: number
   payment_date: string
   payment_method: string
+  payment_type: string | null
   reference: string
   notes: string
+  recorded_by: string | null
   created_at: string
-  created_by: string
-  // Joined fields
+  // Derived for display, not columns on payments
+  client_name?: string
   order_number?: string
 }
 
