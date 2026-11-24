@@ -20,6 +20,16 @@ function formatCurrency(val: number) {
   return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', maximumFractionDigits: 0 }).format(val || 0)
 }
 
+// Orders back-filled from invoices that were raised off a quote with no China
+// order behind them. They exist only so the invoice has something to hang off,
+// and nothing was ever shipped — so they stay out of the shipment pipeline
+// rather than sitting at a shipment status that would be untrue.
+const BACKFILL_TAG = '[BACK-FILLED'
+
+function isInvoiceOnly(order: { notes?: string | null }): boolean {
+  return (order.notes || '').trimStart().startsWith(BACKFILL_TAG)
+}
+
 function getStageIndex(status: ShipmentStatus | undefined): number {
   if (!status) return 0
   return SHIPMENT_STAGES.findIndex(s => s.key === status)
@@ -465,6 +475,7 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true)
   const [filterText, setFilterText] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
+  const [showInvoiceOnly, setShowInvoiceOnly] = useState(false)
   
   // Detail/Edit modal
   const [selectedOrder, setSelectedOrder] = useState<OrderWithShipping | null>(null)
@@ -534,8 +545,13 @@ export default function OrdersPage() {
   }, [invoices])
 
   // Filter orders
+  const invoiceOnlyCount = useMemo(() => orders.filter(isInvoiceOnly).length, [orders])
+
   const filteredOrders = useMemo(() => {
     return orders.filter(order => {
+      // Invoice-only orders never shipped, so they stay out of the shipment
+      // view unless they are explicitly asked for.
+      if (!showInvoiceOnly && isInvoiceOnly(order)) return false
       if (filterStatus !== 'all') {
         const shipmentStatus = order.shipment_status || 'pending'
         if (filterStatus !== shipmentStatus) return false
@@ -548,7 +564,7 @@ export default function OrdersPage() {
       }
       return true
     })
-  }, [orders, filterStatus, filterText])
+  }, [orders, filterStatus, filterText, showInvoiceOnly])
 
   // Group by shipment status
   const ordersByStatus = useMemo(() => {
@@ -709,11 +725,22 @@ export default function OrdersPage() {
           />
         </div>
         {filterStatus !== 'all' && (
-          <button 
+          <button
             onClick={() => setFilterStatus('all')}
             className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1"
           >
             <X className="w-4 h-4" /> Clear filter
+          </button>
+        )}
+        {invoiceOnlyCount > 0 && (
+          <button
+            onClick={() => setShowInvoiceOnly(v => !v)}
+            className="text-sm text-slate-500 hover:text-slate-700 flex items-center gap-1.5 ml-auto"
+          >
+            <Receipt className="w-4 h-4" />
+            {showInvoiceOnly
+              ? `Hide ${invoiceOnlyCount} invoice-only orders`
+              : `${invoiceOnlyCount} invoice-only orders hidden — show`}
           </button>
         )}
       </div>
@@ -766,8 +793,16 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            {/* Shipment Timeline */}
-            <ShipmentTimeline status={order.shipment_status as ShipmentStatus} />
+            {/* Shipment Timeline — an invoice-only order never shipped, so
+                showing a pipeline for it would be a fiction. */}
+            {isInvoiceOnly(order) ? (
+              <div className="flex items-center gap-2 py-2 px-3 bg-slate-50 rounded-lg text-sm text-slate-500">
+                <Receipt className="w-4 h-4 text-slate-400" />
+                Invoice only — raised off a quote, no shipment
+              </div>
+            ) : (
+              <ShipmentTimeline status={order.shipment_status as ShipmentStatus} />
+            )}
 
             {/* Quick Info */}
             <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap gap-4 text-sm">
@@ -897,10 +932,24 @@ export default function OrdersPage() {
                 })()}
 
                 {/* Shipment Timeline */}
-                <div className="py-4">
-                  <h3 className="text-sm font-semibold text-slate-700 mb-4">Shipment Progress</h3>
-                  <ShipmentTimeline status={selectedOrder.shipment_status as ShipmentStatus} />
-                </div>
+                {isInvoiceOnly(selectedOrder) ? (
+                  <div className="py-4">
+                    <h3 className="text-sm font-semibold text-slate-700 mb-2">Shipment Progress</h3>
+                    <div className="flex items-start gap-2 p-3 bg-slate-50 rounded-lg text-sm text-slate-600">
+                      <Receipt className="w-4 h-4 text-slate-400 mt-0.5 flex-shrink-0" />
+                      <span>
+                        This order was created so the invoice had something to hang off. It was raised off a
+                        quote with no China order behind it, nothing was shipped, and the order number is not
+                        one Beijing holds.
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-4">
+                    <h3 className="text-sm font-semibold text-slate-700 mb-4">Shipment Progress</h3>
+                    <ShipmentTimeline status={selectedOrder.shipment_status as ShipmentStatus} />
+                  </div>
+                )}
 
                 {/* Shipment Details */}
                 <div className="space-y-3">
