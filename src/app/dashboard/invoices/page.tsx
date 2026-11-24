@@ -564,6 +564,10 @@ export default function InvoicesPage() {
   // Create invoice
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    // Every invoice must hang off an order. Without it, Payments and Orders
+    // drift apart again — which is how settled invoices ended up showing as
+    // overdue in the first place.
+    if (!form.order_id) return toast.error('Pick the order this invoice is for')
     if (!form.client_name) return toast.error('Client name is required')
     if (form.line_items.some(li => !li.product || !li.qty || !li.unitPrice)) {
       return toast.error('All line items need product name, quantity, and price')
@@ -761,6 +765,7 @@ export default function InvoicesPage() {
     const { subtotal, vatAmount, total } = calculateTotals(editForm.line_items, editForm.discount)
     
     const { error } = await supabase.from('invoices').update({
+      order_id: editForm.order_id || null,
       client_name: editForm.client_name,
       client_email: editForm.client_email,
       client_address: editForm.client_address,
@@ -1147,9 +1152,11 @@ export default function InvoicesPage() {
           {/* Link to Order */}
           <div className="bg-slate-50 rounded-xl p-4">
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Link to Order <span className="text-slate-400">(optional - will pre-fill details)</span>
+              Link to Order <span className="text-red-500">*</span>
+              <span className="text-slate-400 font-normal"> — pre-fills the details and keeps Payments in step</span>
             </label>
             <select
+              required
               value={form.order_id}
               onChange={(e) => handleOrderSelect(e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -1348,6 +1355,30 @@ export default function InvoicesPage() {
             {editing ? (
               /* EDIT MODE */
               <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+                {/* Link to Order — editable here so the older invoices that
+                    were created before this was required can be attached to
+                    their order. */}
+                <div className="bg-slate-50 rounded-xl p-4">
+                  <label className="block text-sm font-medium text-slate-700 mb-2">
+                    Linked Order
+                    {!editForm.order_id && (
+                      <span className="text-amber-600 font-normal"> — not linked, so this invoice is missing from the order</span>
+                    )}
+                  </label>
+                  <select
+                    value={editForm.order_id}
+                    onChange={(e) => setEditForm(f => ({ ...f, order_id: e.target.value }))}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  >
+                    <option value="">— No order —</option>
+                    {orders.map(o => (
+                      <option key={o.id} value={o.id}>
+                        {o.order_number} - {o.client_name} ({formatCurrency(o.value_zar)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Client Details */}
                 <div className="space-y-3">
                   <label className="block text-sm font-semibold text-slate-700">Client Details</label>
