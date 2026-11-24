@@ -177,17 +177,21 @@ export interface Formula {
 
 export interface PaymentRecord {
   id: string
-  order_id: string
+  // The column is payment_method, not method — writing the wrong name is what
+  // made every Record Payment fail. Payments are now raised against an
+  // invoice's client; order_id remains for older order-linked rows.
+  order_id: string | null
+  client_id: string | null
+  client_name: string
   amount: number
   payment_date: string
-  method: string
+  payment_method: string
   reference: string
   notes: string
   created_at: string
   created_by: string
   // Joined fields
   order_number?: string
-  client_name?: string
 }
 
 export interface StockItem {

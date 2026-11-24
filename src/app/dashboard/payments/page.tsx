@@ -2,8 +2,9 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { Order, PaymentRecord } from '@/lib/types'
+import type { Invoice, PaymentRecord } from '@/lib/types'
 import { DollarSign, TrendingUp, AlertTriangle, Clock, Plus, X, Search, Filter } from 'lucide-react'
+import { toast } from 'sonner'
 
 function formatCurrency(val: number) {
   return new Intl.NumberFormat('en-ZA', { style: 'currency', currency: 'ZAR', maximumFractionDigits: 0 }).format(val || 0)
@@ -33,7 +34,11 @@ function Modal({ open, onClose, title, children }: { open: boolean; onClose: () 
 const PAYMENT_METHODS = ['bank_transfer', 'card', 'cash', 'eft', 'cheque', 'other']
 
 export default function PaymentsPage() {
-  const [orders, setOrders] = useState<Order[]>([])
+  // This page runs off invoices, not orders. Invoices are where the billing
+  // and amount_paid actually live, so Payments and Invoices now agree;
+  // driving it off orders showed fully-paid invoices as overdue and hid every
+  // invoice that had no order behind it.
+  const [invoices, setInvoices] = useState<Invoice[]>([])
   const [payments, setPayments] = useState<PaymentRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
@@ -41,7 +46,7 @@ export default function PaymentsPage() {
   const [filterStatus, setFilterStatus] = useState<'all' | 'paid' | 'partial' | 'unpaid' | 'overdue'>('all')
 
   // Form state
-  const [selectedOrderId, setSelectedOrderId] = useState('')
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState('')
   const [paymentAmount, setPaymentAmount] = useState('')
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0])
   const [paymentMethod, setPaymentMethod] = useState('bank_transfer')
@@ -52,11 +57,11 @@ export default function PaymentsPage() {
   const supabase = createClient()
 
   const fetchAll = useCallback(async () => {
-    const [ordersRes, paymentsRes] = await Promise.all([
-      supabase.from('orders').select('*').order('created_at', { ascending: false }),
+    const [invoicesRes, paymentsRes] = await Promise.all([
+      supabase.from('invoices').select('*').order('invoice_date', { ascending: false }),
       supabase.from('payments').select('*').order('payment_date', { ascending: false }),
     ])
-    setOrders(ordersRes.data || [])
+    setInvoices(invoicesRes.data || [])
     setPayments(paymentsRes.data || [])
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64,109 +69,145 @@ export default function PaymentsPage() {
 
   useEffect(() => { fetchAll() }, [fetchAll])
 
-  // Calculate payment status per order
-  const ordersWithPaymentStatus = useMemo(() => {
-    return orders.map(order => {
-      const orderPayments = payments.filter(p => p.order_id === order.id)
-      const totalPaid = orderPayments.reduce((sum, p) => sum + Number(p.amount), 0)
-      const totalDue = Number(order.value_zar) || 0
-      const outstanding = totalDue - totalPaid
-      
-      // Check if overdue (> 30 days since order created and not fully paid)
-      const orderAge = daysBetween(new Date(order.created_at), new Date())
-      const isOverdue = outstanding > 0 && orderAge > 30
+  // Payment status per invoice. amount_paid on the invoice is the single
+  // source of truth — the payments table is an audit trail and is never added
+  // on top of it, or every payment would count twice.
+  const invoicesWithPaymentStatus = useMemo(() => {
+    return invoices
+      .filter(inv => inv.status !== 'cancelled')
+      .map(invoice => {
+        const totalDue = Number(invoice.total) || 0
+        const totalPaid = Number(invoice.amount_paid) || 0
+        const outstanding = totalDue - totalPaid
 
-      let paymentStatus: 'paid' | 'partial' | 'unpaid' | 'overdue' = 'unpaid'
-      if (totalPaid >= totalDue) {
-        paymentStatus = 'paid'
-      } else if (totalPaid > 0) {
-        paymentStatus = isOverdue ? 'overdue' : 'partial'
-      } else if (isOverdue) {
-        paymentStatus = 'overdue'
-      }
+        // Age runs from the due date where there is one, otherwise the invoice
+        // date, so "90+ days" means 90 days late rather than 90 days old.
+        const dueDate = invoice.due_date ? new Date(invoice.due_date) : new Date(invoice.invoice_date)
+        const age = daysBetween(dueDate, new Date())
+        const isOverdue = outstanding > 0.005 && age > 0
 
-      return {
-        ...order,
-        totalPaid,
-        outstanding,
-        paymentStatus,
-        orderAge,
-        payments: orderPayments,
-      }
-    })
-  }, [orders, payments])
+        let paymentStatus: 'paid' | 'partial' | 'unpaid' | 'overdue' = 'unpaid'
+        if (outstanding <= 0.005) {
+          paymentStatus = 'paid'
+        } else if (isOverdue) {
+          paymentStatus = 'overdue'
+        } else if (totalPaid > 0) {
+          paymentStatus = 'partial'
+        }
+
+        return { ...invoice, totalDue, totalPaid, outstanding, paymentStatus, age: Math.max(age, 0) }
+      })
+  }, [invoices])
 
   // Financial stats
   const stats = useMemo(() => {
-    const totalInvoiced = ordersWithPaymentStatus.reduce((sum, o) => sum + (Number(o.value_zar) || 0), 0)
-    const totalReceived = payments.reduce((sum, p) => sum + Number(p.amount), 0)
+    const totalInvoiced = invoicesWithPaymentStatus.reduce((sum, i) => sum + i.totalDue, 0)
+    const totalReceived = invoicesWithPaymentStatus.reduce((sum, i) => sum + i.totalPaid, 0)
     const outstanding = totalInvoiced - totalReceived
-    
-    // Overdue amount (orders > 30 days old that aren't fully paid)
-    const overdueOrders = ordersWithPaymentStatus.filter(o => o.paymentStatus === 'overdue')
-    const overdueAmount = overdueOrders.reduce((sum, o) => sum + o.outstanding, 0)
 
-    // Aging buckets
-    const aging = {
-      current: 0,  // 0-30 days
-      thirty: 0,   // 31-60 days
-      sixty: 0,    // 61-90 days
-      ninety: 0,   // 90+ days
-    }
+    const overdueAmount = invoicesWithPaymentStatus
+      .filter(i => i.paymentStatus === 'overdue')
+      .reduce((sum, i) => sum + i.outstanding, 0)
 
-    ordersWithPaymentStatus.forEach(order => {
-      if (order.outstanding <= 0) return
-      const age = order.orderAge
-      
-      if (age <= 30) aging.current += order.outstanding
-      else if (age <= 60) aging.thirty += order.outstanding
-      else if (age <= 90) aging.sixty += order.outstanding
-      else aging.ninety += order.outstanding
+    // Aging buckets, by how far past due the money is
+    const aging = { current: 0, thirty: 0, sixty: 0, ninety: 0 }
+
+    invoicesWithPaymentStatus.forEach(invoice => {
+      if (invoice.outstanding <= 0.005) return
+      const age = invoice.age
+      if (age <= 30) aging.current += invoice.outstanding
+      else if (age <= 60) aging.thirty += invoice.outstanding
+      else if (age <= 90) aging.sixty += invoice.outstanding
+      else aging.ninety += invoice.outstanding
     })
 
     return { totalInvoiced, totalReceived, outstanding, overdueAmount, aging }
-  }, [ordersWithPaymentStatus, payments])
+  }, [invoicesWithPaymentStatus])
 
-  // Filter orders
-  const filteredOrders = useMemo(() => {
-    return ordersWithPaymentStatus.filter(order => {
-      // Status filter
-      if (filterStatus !== 'all' && order.paymentStatus !== filterStatus) return false
-      
-      // Text filter
+  // Filter invoices
+  const filteredInvoices = useMemo(() => {
+    return invoicesWithPaymentStatus.filter(invoice => {
+      if (filterStatus !== 'all' && invoice.paymentStatus !== filterStatus) return false
+
       if (filterText) {
         const search = filterText.toLowerCase()
-        return order.order_number?.toLowerCase().includes(search) ||
-               order.client_name?.toLowerCase().includes(search)
+        return invoice.invoice_number?.toLowerCase().includes(search) ||
+               invoice.client_name?.toLowerCase().includes(search)
       }
       return true
     })
-  }, [ordersWithPaymentStatus, filterStatus, filterText])
+  }, [invoicesWithPaymentStatus, filterStatus, filterText])
+
+  const selectedInvoice = invoicesWithPaymentStatus.find(i => i.id === selectedInvoiceId)
 
   // Submit payment
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedOrderId || !paymentAmount) return
+    if (!selectedInvoiceId || !paymentAmount) return
+
+    const invoice = invoicesWithPaymentStatus.find(i => i.id === selectedInvoiceId)
+    if (!invoice) return
+
+    const amount = parseFloat(paymentAmount)
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Enter a valid payment amount')
+      return
+    }
+    // Guards against recording money twice against an invoice that is already
+    // settled, which the old order-based view made easy to do.
+    if (invoice.outstanding <= 0.005) {
+      toast.error(`${invoice.invoice_number} is already paid in full`)
+      return
+    }
+    if (amount > invoice.outstanding + 0.005) {
+      toast.error(`That is more than the ${formatCurrency(invoice.outstanding)} still outstanding on ${invoice.invoice_number}`)
+      return
+    }
 
     setSaving(true)
-    const { error } = await supabase.from('payments').insert({
-      order_id: selectedOrderId,
-      amount: parseFloat(paymentAmount),
+
+    const newAmountPaid = invoice.totalPaid + amount
+    const newStatus = newAmountPaid >= invoice.totalDue - 0.005 ? 'paid' : 'partial'
+
+    const { error: invoiceError } = await supabase.from('invoices').update({
+      amount_paid: newAmountPaid,
+      status: newStatus,
+      updated_at: new Date().toISOString(),
+    }).eq('id', invoice.id)
+
+    if (invoiceError) {
+      setSaving(false)
+      console.error('Error updating invoice:', invoiceError)
+      toast.error(invoiceError.message || 'Failed to record payment')
+      return
+    }
+
+    // Audit row. The invoice is identified by its number in the reference,
+    // because the payments table has no invoice_id column.
+    const { error: paymentError } = await supabase.from('payments').insert({
+      order_id: invoice.order_id,
+      client_id: invoice.client_id,
+      client_name: invoice.client_name,
+      amount,
       payment_date: paymentDate,
-      method: paymentMethod,
-      reference: paymentRef,
+      payment_method: paymentMethod,
+      reference: paymentRef ? `${invoice.invoice_number} · ${paymentRef}` : invoice.invoice_number,
       notes: paymentNotes,
     })
 
     setSaving(false)
-    if (error) {
-      console.error('Error recording payment:', error)
-      alert('Failed to record payment')
-      return
+
+    if (paymentError) {
+      // The invoice is already updated, so the money IS recorded — only the
+      // audit row failed. Say that rather than implying nothing happened.
+      console.error('Error writing payment record:', paymentError)
+      toast.error(`Invoice updated, but the payment log entry failed: ${paymentError.message}`)
+    } else {
+      toast.success(`Payment of ${formatCurrency(amount)} recorded against ${invoice.invoice_number}`)
     }
 
     // Reset form
-    setSelectedOrderId('')
+    setSelectedInvoiceId('')
     setPaymentAmount('')
     setPaymentDate(new Date().toISOString().split('T')[0])
     setPaymentMethod('bank_transfer')
@@ -175,9 +216,6 @@ export default function PaymentsPage() {
     setModalOpen(false)
     fetchAll()
   }
-
-  // Get selected order details
-  const selectedOrder = ordersWithPaymentStatus.find(o => o.id === selectedOrderId)
 
   if (loading) {
     return (
@@ -261,7 +299,7 @@ export default function PaymentsPage() {
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search orders..."
+            placeholder="Search invoices..."
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
             className="pl-9 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 w-48"
@@ -283,13 +321,13 @@ export default function PaymentsPage() {
         </div>
       </div>
 
-      {/* Orders with Payment Status */}
+      {/* Invoices with Payment Status */}
       <div className="card p-0 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="table-modern">
             <thead>
               <tr>
-                <th>Order</th>
+                <th>Invoice</th>
                 <th>Client</th>
                 <th className="text-right">Invoiced</th>
                 <th className="text-right">Paid</th>
@@ -300,16 +338,16 @@ export default function PaymentsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map(order => (
-                <tr key={order.id} className={order.paymentStatus === 'overdue' ? 'bg-red-50' : ''}>
-                  <td className="font-mono font-medium text-slate-700">{order.order_number}</td>
-                  <td className="font-medium text-slate-800">{order.client_name}</td>
-                  <td className="text-right">{formatCurrency(order.value_zar)}</td>
-                  <td className="text-right text-emerald-600 font-medium">{formatCurrency(order.totalPaid)}</td>
+              {filteredInvoices.map(invoice => (
+                <tr key={invoice.id} className={invoice.paymentStatus === 'overdue' ? 'bg-red-50' : ''}>
+                  <td className="font-mono font-medium text-slate-700">{invoice.invoice_number}</td>
+                  <td className="font-medium text-slate-800">{invoice.client_name}</td>
+                  <td className="text-right">{formatCurrency(invoice.totalDue)}</td>
+                  <td className="text-right text-emerald-600 font-medium">{formatCurrency(invoice.totalPaid)}</td>
                   <td className="text-right font-medium">
-                    {order.outstanding > 0 ? (
-                      <span className={order.paymentStatus === 'overdue' ? 'text-red-600' : 'text-amber-600'}>
-                        {formatCurrency(order.outstanding)}
+                    {invoice.outstanding > 0.005 ? (
+                      <span className={invoice.paymentStatus === 'overdue' ? 'text-red-600' : 'text-amber-600'}>
+                        {formatCurrency(invoice.outstanding)}
                       </span>
                     ) : (
                       <span className="text-slate-400">—</span>
@@ -317,19 +355,21 @@ export default function PaymentsPage() {
                   </td>
                   <td className="text-center">
                     <span className={`badge ${
-                      order.paymentStatus === 'paid' ? 'badge-green' :
-                      order.paymentStatus === 'partial' ? 'badge-amber' :
-                      order.paymentStatus === 'overdue' ? 'badge-red' :
+                      invoice.paymentStatus === 'paid' ? 'badge-green' :
+                      invoice.paymentStatus === 'partial' ? 'badge-amber' :
+                      invoice.paymentStatus === 'overdue' ? 'badge-red' :
                       'badge-default'
                     }`}>
-                      {order.paymentStatus}
+                      {invoice.paymentStatus}
                     </span>
                   </td>
-                  <td className="text-center text-sm text-slate-500">{order.orderAge}d</td>
+                  <td className="text-center text-sm text-slate-500">
+                    {invoice.outstanding > 0.005 && invoice.age > 0 ? `${invoice.age}d` : '—'}
+                  </td>
                   <td>
-                    {order.outstanding > 0 && (
+                    {invoice.outstanding > 0.005 && (
                       <button
-                        onClick={() => { setSelectedOrderId(order.id); setModalOpen(true) }}
+                        onClick={() => { setSelectedInvoiceId(invoice.id); setModalOpen(true) }}
                         className="text-teal-600 hover:text-teal-700 font-medium text-sm"
                       >
                         Add Payment
@@ -338,10 +378,10 @@ export default function PaymentsPage() {
                   </td>
                 </tr>
               ))}
-              {filteredOrders.length === 0 && (
+              {filteredInvoices.length === 0 && (
                 <tr>
                   <td colSpan={8} className="text-center py-8 text-slate-400">
-                    No orders found
+                    No invoices found
                   </td>
                 </tr>
               )}
@@ -355,30 +395,25 @@ export default function PaymentsPage() {
         <div className="card">
           <h2 className="font-bold text-slate-900 text-lg mb-4">Recent Payments</h2>
           <div className="space-y-3">
-            {payments.slice(0, 10).map(payment => {
-              const order = orders.find(o => o.id === payment.order_id)
-              return (
-                <div key={payment.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                      <DollarSign className="w-5 h-5 text-emerald-600" />
-                    </div>
-                    <div>
-                      <div className="font-medium text-slate-800">
-                        {order?.client_name || 'Unknown'} - {order?.order_number || 'N/A'}
-                      </div>
-                      <div className="text-sm text-slate-500">
-                        {payment.method?.replace('_', ' ')} • {payment.reference || 'No ref'}
-                      </div>
-                    </div>
+            {payments.slice(0, 10).map(payment => (
+              <div key={payment.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
+                    <DollarSign className="w-5 h-5 text-emerald-600" />
                   </div>
-                  <div className="text-right">
-                    <div className="font-bold text-emerald-600">{formatCurrency(payment.amount)}</div>
-                    <div className="text-sm text-slate-500">{payment.payment_date}</div>
+                  <div>
+                    <div className="font-medium text-slate-800">{payment.client_name || 'Unknown'}</div>
+                    <div className="text-sm text-slate-500">
+                      {payment.payment_method?.replace('_', ' ')} • {payment.reference || 'No ref'}
+                    </div>
                   </div>
                 </div>
-              )
-            })}
+                <div className="text-right">
+                  <div className="font-bold text-emerald-600">{formatCurrency(payment.amount)}</div>
+                  <div className="text-sm text-slate-500">{payment.payment_date}</div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -386,38 +421,38 @@ export default function PaymentsPage() {
       {/* Record Payment Modal */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Record Payment">
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Order Selection */}
+          {/* Invoice selection — only invoices that still owe money */}
           <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Order</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Invoice</label>
             <select
-              value={selectedOrderId}
-              onChange={(e) => setSelectedOrderId(e.target.value)}
+              value={selectedInvoiceId}
+              onChange={(e) => setSelectedInvoiceId(e.target.value)}
               className="input"
               required
             >
-              <option value="">Select order...</option>
-              {ordersWithPaymentStatus.filter(o => o.outstanding > 0).map(order => (
-                <option key={order.id} value={order.id}>
-                  {order.order_number} - {order.client_name} ({formatCurrency(order.outstanding)} due)
+              <option value="">Select invoice...</option>
+              {invoicesWithPaymentStatus.filter(i => i.outstanding > 0.005).map(invoice => (
+                <option key={invoice.id} value={invoice.id}>
+                  {invoice.invoice_number} - {invoice.client_name} ({formatCurrency(invoice.outstanding)} due)
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Order Summary */}
-          {selectedOrder && (
+          {/* Invoice Summary */}
+          {selectedInvoice && (
             <div className="bg-slate-50 rounded-xl p-3 text-sm">
               <div className="flex justify-between mb-1">
                 <span className="text-slate-500">Total invoiced:</span>
-                <span className="font-medium">{formatCurrency(selectedOrder.value_zar)}</span>
+                <span className="font-medium">{formatCurrency(selectedInvoice.totalDue)}</span>
               </div>
               <div className="flex justify-between mb-1">
                 <span className="text-slate-500">Already paid:</span>
-                <span className="font-medium text-emerald-600">{formatCurrency(selectedOrder.totalPaid)}</span>
+                <span className="font-medium text-emerald-600">{formatCurrency(selectedInvoice.totalPaid)}</span>
               </div>
               <div className="flex justify-between pt-2 border-t border-slate-200">
                 <span className="text-slate-700 font-medium">Outstanding:</span>
-                <span className="font-bold text-amber-600">{formatCurrency(selectedOrder.outstanding)}</span>
+                <span className="font-bold text-amber-600">{formatCurrency(selectedInvoice.outstanding)}</span>
               </div>
             </div>
           )}
@@ -428,9 +463,11 @@ export default function PaymentsPage() {
             <input
               type="number"
               step="0.01"
+              min="0.01"
+              max={selectedInvoice ? selectedInvoice.outstanding.toFixed(2) : undefined}
               value={paymentAmount}
               onChange={(e) => setPaymentAmount(e.target.value)}
-              placeholder={selectedOrder ? `Max: ${selectedOrder.outstanding.toFixed(2)}` : 'Enter amount'}
+              placeholder={selectedInvoice ? `Max: ${selectedInvoice.outstanding.toFixed(2)}` : 'Enter amount'}
               className="input"
               required
             />
