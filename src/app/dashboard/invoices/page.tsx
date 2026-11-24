@@ -14,6 +14,11 @@ import { toast } from 'sonner'
 
 // Status configuration
 const STATUSES = ['unpaid', 'partial', 'paid', 'overdue', 'cancelled'] as const
+
+// Sentinel for "this invoice deliberately has no order" — a service call, a
+// part off the shelf. Stored as NULL; it exists so the choice has to be made
+// on purpose rather than by leaving the field blank.
+const NO_ORDER = 'none'
 const STATUS_LABELS: Record<string, string> = {
   unpaid: 'Unpaid',
   partial: 'Partial',
@@ -497,6 +502,12 @@ export default function InvoicesPage() {
   
   // Handle order selection (pre-fill from order/quote)
   const handleOrderSelect = (orderId: string) => {
+    // NO_ORDER is a deliberate choice, not a blank. It has to be recorded, or
+    // picking it would leave the field empty and the form would refuse to save.
+    if (orderId === NO_ORDER || !orderId) {
+      setForm(f => ({ ...f, order_id: orderId }))
+      return
+    }
     const order = orders.find(o => o.id === orderId)
     if (order) {
       setForm(f => ({
@@ -564,10 +575,9 @@ export default function InvoicesPage() {
   // Create invoice
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Every invoice must hang off an order. Without it, Payments and Orders
-    // drift apart again — which is how settled invoices ended up showing as
-    // overdue in the first place.
-    if (!form.order_id) return toast.error('Pick the order this invoice is for')
+    // An invoice must either hang off an order or say outright that it has
+    // none. Leaving it blank is what let Payments and Orders drift apart.
+    if (!form.order_id) return toast.error('Pick the order this invoice is for, or choose "No order"')
     if (!form.client_name) return toast.error('Client name is required')
     if (form.line_items.some(li => !li.product || !li.qty || !li.unitPrice)) {
       return toast.error('All line items need product name, quantity, and price')
@@ -579,7 +589,7 @@ export default function InvoicesPage() {
     
     const { error } = await supabase.from('invoices').insert({
       invoice_number: invoiceNumber,
-      order_id: form.order_id || null,
+      order_id: form.order_id === NO_ORDER ? null : (form.order_id || null),
       quote_id: form.quote_id || null,
       client_id: form.client_id || null,
       client_name: form.client_name,
@@ -1167,7 +1177,13 @@ export default function InvoicesPage() {
                   {o.order_number} - {o.client_name} ({formatCurrency(o.value_zar)})
                 </option>
               ))}
+              <option value={NO_ORDER}>No order — standalone invoice</option>
             </select>
+            {form.order_id === NO_ORDER && (
+              <p className="mt-2 text-xs text-amber-700">
+                This invoice will not appear against any order. Only do this for work with no order behind it.
+              </p>
+            )}
           </div>
           
           {/* Client Details */}
