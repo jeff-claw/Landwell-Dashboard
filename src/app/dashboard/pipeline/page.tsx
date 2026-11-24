@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import type { PipelineDeal, PipelineStatus, Quote, Client, Formula } from '@/lib/types'
 import { Plus, X, ChevronDown, ChevronRight, Search, Expand, Shrink, User, FileText, ExternalLink, Calendar, DollarSign, Mail, Phone, Clock, AlertTriangle, TrendingUp } from 'lucide-react'
-import { calculateZarPrice, getStageProbability, quoteState, quoteValueZar, deriveDeals } from '@/lib/pipeline-value'
+import { calculateZarPrice, getStageProbability, quoteState, quoteValueZar } from '@/lib/pipeline-value'
+import { toast } from 'sonner'
 
 
 
@@ -29,6 +30,43 @@ const STAGES: { key: PipelineStatus; label: string; color: string; borderColor: 
 ]
 
 const DEALS_PER_COLUMN = 10 // Limit for display per column
+
+// A card on this board is one QUOTE, not one client. The pipeline table is
+// client-level with no quote reference, so moving a client's card used to
+// look like every quote under it had moved — and 149 of 190 quotes belong to
+// a client holding more than one. Clients with no quotes yet still appear as
+// their own lead card.
+const QUOTE_STATE_STAGE: Record<string, PipelineStatus> = {
+  accepted: 'po_received',
+  lost: 'closed_lost',
+  sent: 'proposal_sent',
+  draft: 'lead_generated',
+}
+
+// Only these four stages can be expressed on a quote; the others exist for
+// client leads that have no quote behind them yet.
+const STAGE_QUOTE_STATUS: Record<string, string> = {
+  lead_generated: 'draft',
+  proposal_sent: 'sent',
+  po_received: 'accepted',
+  closed_lost: 'declined',
+}
+
+type BoardCard = {
+  id: string
+  kind: 'quote' | 'client'
+  client_id?: string | null
+  notes?: string | null
+  quoteId?: string
+  quoteNumber?: string
+  client_name: string
+  status: string
+  dealValue: number
+  quoteCount: number
+  created_at: string
+  updated_at: string
+  title?: string
+}
 
 const emptyDeal = { title: '', value: 0, status: 'lead_generated' as PipelineStatus, client_id: '', notes: '' }
 
@@ -77,7 +115,7 @@ function DealDetailModal({
   onStatusChange,
   stages,
 }: {
-  deal: PipelineDeal
+  deal: BoardCard
   client: Client | null
   quotes: Quote[]
   formula: Formula | null
@@ -100,7 +138,7 @@ function DealDetailModal({
 
   const daysInStage = daysBetween(new Date(deal.updated_at || deal.created_at), new Date())
   const probability = getStageProbability(deal.status)
-  const weightedValue = (Number(deal.value) || 0) * probability
+  const weightedValue = deal.dealValue * probability
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -188,7 +226,7 @@ function DealDetailModal({
                 <DollarSign className="w-4 h-4" />
                 <span className="text-xs font-semibold uppercase tracking-wide">Deal Value</span>
               </div>
-              <p className="text-2xl font-bold text-teal-700">{formatCurrency(deal.value || 0)}</p>
+              <p className="text-2xl font-bold text-teal-700">{formatCurrency(deal.dealValue)}</p>
             </div>
             <div className="bg-emerald-50 rounded-xl p-4">
               <div className="flex items-center gap-2 text-emerald-700 mb-1">
@@ -330,7 +368,7 @@ export default function PipelinePage() {
   const [quotes, setQuotes] = useState<Quote[]>([])
   const [formula, setFormula] = useState<Formula | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedDeal, setSelectedDeal] = useState<PipelineDeal | null>(null)
+  const [selectedDeal, setSelectedDeal] = useState<BoardCard | null>(null)
   // Columns start EXPANDED so deal cards are visible on load. Previously all
   // stages defaulted to collapsed, so the board rendered only headers/counts
   // with zero visible cards — the page looked empty despite having deals.
@@ -419,10 +457,49 @@ export default function PipelinePage() {
 
   // Stage and value come from the client's quotes, shared with the dashboard,
   // weekly review, reports and client pages so every screen agrees.
-  const dealsWithQuotes = useMemo(
-    () => deriveDeals(deals, quotes, formula),
-    [deals, quotes, formula]
-  )
+  const dealsWithQuotes = useMemo<BoardCard[]>(() => {
+    const key = (n: string | null | undefined) => (n || '').trim().toLowerCase()
+    const clientsWithQuotes = new Set(quotes.map(q => key(q.client_name)).filter(Boolean))
+    const cards: BoardCard[] = []
+
+    // One card per quote, sitting in the stage its own status implies.
+    quotes.forEach(q => {
+      cards.push({
+        id: `quote:${q.id}`,
+        kind: 'quote',
+        quoteId: q.id,
+        quoteNumber: q.quote_number,
+        client_id: q.client_id,
+        notes: q.notes,
+        client_name: q.client_name || '',
+        status: QUOTE_STATE_STAGE[quoteState(q.status)] || 'lead_generated',
+        dealValue: quoteValueZar(q, formula),
+        quoteCount: 1,
+        created_at: q.created_at,
+        updated_at: q.updated_at || q.created_at,
+      })
+    })
+
+    // Clients with no quote yet stay as their own lead card, keeping whatever
+    // stage someone set by hand.
+    deals.forEach(d => {
+      if (clientsWithQuotes.has(key(d.client_name))) return
+      cards.push({
+        id: d.id,
+        kind: 'client',
+        client_id: d.client_id,
+        notes: d.notes,
+        client_name: d.client_name || '',
+        status: d.status,
+        dealValue: Number(d.value_estimate) || 0,
+        quoteCount: 0,
+        created_at: d.created_at,
+        updated_at: d.updated_at || d.created_at,
+      })
+    })
+
+    return cards
+  }, [deals, quotes, formula])
 
   // Filter deals by search query — over the quote-derived list, so the board
   // columns and the search agree with the stages shown.
@@ -470,7 +547,7 @@ export default function PipelinePage() {
   }
 
   // Get client for a deal
-  const getClientForDeal = (deal: PipelineDeal): Client | null => {
+  const getClientForDeal = (deal: BoardCard): Client | null => {
     if (deal.client_id) {
       return clients.find(c => c.id === deal.client_id) || null
     }
@@ -478,8 +555,11 @@ export default function PipelinePage() {
   }
 
   // Get quotes for a deal
-  const getQuotesForDeal = (deal: PipelineDeal): Quote[] => {
-    return quotes.filter(q => q.client_name?.toLowerCase() === deal.client_name?.toLowerCase())
+  const getQuotesForDeal = (card: BoardCard): Quote[] => {
+    // A quote card shows only its own quote; a client lead card shows the
+    // client's quotes, of which it has none by definition.
+    if (card.kind === 'quote') return quotes.filter(q => q.id === card.quoteId)
+    return quotes.filter(q => q.client_name?.toLowerCase() === card.client_name?.toLowerCase())
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -497,6 +577,27 @@ export default function PipelinePage() {
   }
 
   const handleStatusChange = async (id: string, status: PipelineStatus) => {
+    // A quote card moves that one quote, and nothing else belonging to the
+    // client. Stages with no equivalent on a quote are refused rather than
+    // silently snapping back on the next load.
+    if (id.startsWith('quote:')) {
+      const quoteStatus = STAGE_QUOTE_STATUS[status]
+      if (!quoteStatus) {
+        toast.error('A quote can only be Draft, Quoted, PO Received or Closed Lost')
+        return
+      }
+      const { error } = await supabase
+        .from('quotes')
+        .update({ status: quoteStatus, updated_at: new Date().toISOString() })
+        .eq('id', id.slice('quote:'.length))
+      if (error) {
+        toast.error(error.message || 'Could not move that quote')
+        return
+      }
+      fetchQuotes()
+      return
+    }
+
     await supabase.from('pipeline').update({ status, updated_at: new Date().toISOString() }).eq('id', id)
     fetchDeals()
   }
@@ -667,7 +768,7 @@ export default function PipelinePage() {
         {STAGES.map((stage) => {
           const stageDeals = filteredDeals.filter(d => d.status === stage.key)
           const isCollapsed = collapsed[stage.key]
-          const stageWeightedValue = stageDeals.reduce((sum, d) => sum + ((Number(d.value) || 0) * stage.probability), 0)
+          const stageWeightedValue = stageDeals.reduce((sum, d) => sum + (d.dealValue * stage.probability), 0)
           
           return (
             <div 
@@ -735,6 +836,9 @@ export default function PipelinePage() {
                             <p className="font-semibold text-sm text-slate-900 group-hover:text-teal-700 transition-colors">
                               {deal.client_name || deal.title}
                             </p>
+                            {deal.quoteNumber && (
+                              <p className="font-mono text-[11px] text-slate-500">{deal.quoteNumber}</p>
+                            )}
                             
                             {/* Status Badges */}
                             <div className="mt-2 flex flex-wrap items-center gap-1.5">
