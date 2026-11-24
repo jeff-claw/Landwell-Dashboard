@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import type { PipelineDeal, PipelineStatus, Quote, Client, Formula } from '@/lib/types'
+import type { PipelineDeal, PipelineStatus, Quote, Client, Formula, Invoice } from '@/lib/types'
 import { Plus, X, ChevronDown, ChevronRight, Search, Expand, Shrink, User, FileText, ExternalLink, Calendar, DollarSign, Mail, Phone, Clock, AlertTriangle, TrendingUp } from 'lucide-react'
 import { calculateZarPrice, getStageProbability, quoteState, quoteValueZar } from '@/lib/pipeline-value'
 import { toast } from 'sonner'
@@ -55,6 +55,8 @@ const STAGE_QUOTE_STATUS: Record<string, string> = {
 type BoardCard = {
   id: string
   kind: 'quote' | 'client'
+  /** Won because a linked invoice is paid, not because of the quote's status. */
+  wonFromInvoice?: boolean
   client_id?: string | null
   notes?: string | null
   quoteId?: string
@@ -366,6 +368,7 @@ export default function PipelinePage() {
   const [saving, setSaving] = useState(false)
   const [clients, setClients] = useState<Client[]>([])
   const [quotes, setQuotes] = useState<Quote[]>([])
+  const [invoices, setInvoices] = useState<Invoice[]>([])
   const [formula, setFormula] = useState<Formula | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedDeal, setSelectedDeal] = useState<BoardCard | null>(null)
@@ -413,6 +416,11 @@ export default function PipelinePage() {
     setQuotes(data || [])
   }
 
+  const fetchInvoices = async () => {
+    const { data } = await supabase.from('invoices').select('*')
+    setInvoices(data || [])
+  }
+
   const fetchFormula = async () => {
     const { data } = await supabase.from('formula').select('*').limit(1).single()
     setFormula(data)
@@ -422,6 +430,7 @@ export default function PipelinePage() {
     fetchDeals()
     fetchClients()
     fetchQuotes()
+    fetchInvoices()
     fetchFormula()
 
     // Real-time subscription for quotes changes (so deleted quotes disappear)
@@ -457,6 +466,22 @@ export default function PipelinePage() {
 
   // Stage and value come from the client's quotes, shared with the dashboard,
   // weekly review, reports and client pages so every screen agrees.
+  // A quote counts as won when the invoice raised against it has actually
+  // been paid. Quote status cannot say that — "accepted" only means the
+  // client agreed — so Closed Won is driven by the money, not by the quote.
+  const paidByQuoteId = useMemo(() => {
+    const map = new Map<string, number>()
+    invoices.forEach(inv => {
+      if (!inv.quote_id || inv.status === 'cancelled') return
+      const total = Number(inv.total) || 0
+      const paid = Number(inv.amount_paid) || 0
+      if (total > 0 && paid >= total - 0.005) {
+        map.set(inv.quote_id, (map.get(inv.quote_id) || 0) + total)
+      }
+    })
+    return map
+  }, [invoices])
+
   const dealsWithQuotes = useMemo<BoardCard[]>(() => {
     const key = (n: string | null | undefined) => (n || '').trim().toLowerCase()
     const clientsWithQuotes = new Set(quotes.map(q => key(q.client_name)).filter(Boolean))
@@ -464,6 +489,7 @@ export default function PipelinePage() {
 
     // One card per quote, sitting in the stage its own status implies.
     quotes.forEach(q => {
+      const paidTotal = paidByQuoteId.get(q.id)
       cards.push({
         id: `quote:${q.id}`,
         kind: 'quote',
@@ -472,8 +498,11 @@ export default function PipelinePage() {
         client_id: q.client_id,
         notes: q.notes,
         client_name: q.client_name || '',
-        status: QUOTE_STATE_STAGE[quoteState(q.status)] || 'lead_generated',
-        dealValue: quoteValueZar(q, formula),
+        status: paidTotal ? 'closed_won' : (QUOTE_STATE_STAGE[quoteState(q.status)] || 'lead_generated'),
+        // A won card is worth what was actually invoiced and collected,
+        // not what the quote once asked for.
+        dealValue: paidTotal ?? quoteValueZar(q, formula),
+        wonFromInvoice: Boolean(paidTotal),
         quoteCount: 1,
         created_at: q.created_at,
         updated_at: q.updated_at || q.created_at,
@@ -499,7 +528,7 @@ export default function PipelinePage() {
     })
 
     return cards
-  }, [deals, quotes, formula])
+  }, [deals, quotes, formula, paidByQuoteId])
 
   // Filter deals by search query — over the quote-derived list, so the board
   // columns and the search agree with the stages shown.
@@ -581,6 +610,11 @@ export default function PipelinePage() {
     // client. Stages with no equivalent on a quote are refused rather than
     // silently snapping back on the next load.
     if (id.startsWith('quote:')) {
+      const card = dealsWithQuotes.find(c => c.id === id)
+      if (card?.wonFromInvoice) {
+        toast.error('This one is won because its invoice is paid. Change the invoice, not the quote.')
+        return
+      }
       const quoteStatus = STAGE_QUOTE_STATUS[status]
       if (!quoteStatus) {
         toast.error('A quote can only be Draft, Quoted, PO Received or Closed Lost')
