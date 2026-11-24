@@ -1,14 +1,26 @@
 import { NextResponse } from 'next/server'
 import { getServiceClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase/server'
 
 // Logs an access request from the Access Denied page (service role).
+//
+// This one stays open to any signed-in user — being refused a page is exactly
+// when you need it — but it no longer believes the caller about who they are.
+// It used to take user_id and email straight from the request body, so anyone
+// could file a request in a colleague's name.
 export async function POST(request: Request) {
   try {
-    const { userId, email, page } = await request.json()
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Not signed in' }, { status: 401 })
+    }
+
+    const { page } = await request.json()
     const admin = getServiceClient()
     const { error } = await admin.from('access_requests').insert({
-      user_id: userId || null,
-      email: email || null,
+      user_id: user.id,
+      email: user.email || null,
       page: page || null,
       status: 'open',
     })

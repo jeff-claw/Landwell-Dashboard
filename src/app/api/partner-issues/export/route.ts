@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import ExcelJS from 'exceljs'
 import { getServiceClient } from '@/lib/supabase'
+import { requirePageAccess } from '@/lib/api-auth'
 import {
   PARTNER_ISSUE_STATUS_CONFIG,
   PARTNER_ISSUE_PRIORITY_CONFIG,
@@ -53,6 +54,9 @@ function ymd(d: Date) {
 
 export async function GET() {
   try {
+    const denied = await requirePageAccess('partner-issues')
+    if (denied) return denied
+
     const admin = getServiceClient()
 
     const [issuesRes, clientsRes, evidenceRes] = await Promise.all([
