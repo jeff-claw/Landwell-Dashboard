@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { OrderWithShipping, ShipmentStatus, Client, Quote } from '@/lib/types'
+import type { OrderWithShipping, ShipmentStatus, Client, Quote, Invoice } from '@/lib/types'
 import { Package, Ship, Truck, CheckCircle, Clock, MapPin, X, Search, Edit2, Plus, Receipt, ClipboardList, Trash2 } from 'lucide-react'
 
 const SHIPMENT_STAGES: { key: ShipmentStatus; label: string; icon: React.ElementType; color: string }[] = [
@@ -461,6 +461,7 @@ function CreateOrderModal({
 
 export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderWithShipping[]>([])
+  const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [filterText, setFilterText] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
@@ -477,16 +478,60 @@ export default function OrdersPage() {
   const supabase = createClient()
 
   const fetchOrders = useCallback(async () => {
-    const { data } = await supabase
-      .from('orders')
-      .select('*')
-      .order('created_at', { ascending: false })
-    setOrders(data || [])
+    const [ordersRes, invoicesRes] = await Promise.all([
+      supabase.from('orders').select('*').order('created_at', { ascending: false }),
+      supabase.from('invoices').select('*'),
+    ])
+    setOrders(ordersRes.data || [])
+    setInvoices(invoicesRes.data || [])
     setLoading(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => { fetchOrders() }, [fetchOrders])
+
+  // Billing for an order comes from its linked invoice, never from the order
+  // itself. Orders and invoices held the same money twice and disagreed; the
+  // invoice is the one that tracks what was actually paid.
+  const billingByOrderId = useMemo(() => {
+    const map = new Map<string, {
+      invoiceNumber: string
+      invoiced: number
+      paid: number
+      outstanding: number
+      status: 'paid' | 'partial' | 'unpaid' | 'overdue'
+    }>()
+
+    invoices.forEach(invoice => {
+      if (!invoice.order_id || invoice.status === 'cancelled') return
+
+      const invoiced = Number(invoice.total) || 0
+      const paid = Number(invoice.amount_paid) || 0
+      const outstanding = invoiced - paid
+
+      const dueDate = invoice.due_date ? new Date(invoice.due_date) : new Date(invoice.invoice_date)
+      const daysLate = Math.floor((Date.now() - dueDate.getTime()) / (1000 * 60 * 60 * 24))
+
+      let status: 'paid' | 'partial' | 'unpaid' | 'overdue' = 'unpaid'
+      if (outstanding <= 0.005) status = 'paid'
+      else if (daysLate > 0) status = 'overdue'
+      else if (paid > 0) status = 'partial'
+
+      // An order can carry more than one invoice; add them together.
+      const existing = map.get(invoice.order_id)
+      if (existing) {
+        existing.invoiceNumber += `, ${invoice.invoice_number}`
+        existing.invoiced += invoiced
+        existing.paid += paid
+        existing.outstanding += outstanding
+        if (status === 'overdue' || (status !== 'paid' && existing.status === 'paid')) existing.status = status
+      } else {
+        map.set(invoice.order_id, { invoiceNumber: invoice.invoice_number, invoiced, paid, outstanding, status })
+      }
+    })
+
+    return map
+  }, [invoices])
 
   // Filter orders
   const filteredOrders = useMemo(() => {
@@ -697,6 +742,27 @@ export default function OrdersPage() {
               <div className="text-right">
                 <div className="font-bold text-lg text-slate-900">{formatCurrency(order.value_zar)}</div>
                 <div className="text-sm text-slate-500">{new Date(order.created_at).toLocaleDateString()}</div>
+                {(() => {
+                  const billing = billingByOrderId.get(order.id)
+                  if (!billing) {
+                    return <div className="mt-1 text-xs text-slate-400">Not invoiced</div>
+                  }
+                  return (
+                    <div className="mt-1 flex items-center justify-end gap-2">
+                      <span className={`badge ${
+                        billing.status === 'paid' ? 'badge-green' :
+                        billing.status === 'partial' ? 'badge-amber' :
+                        billing.status === 'overdue' ? 'badge-red' :
+                        'badge-default'
+                      }`}>
+                        {billing.status}
+                      </span>
+                      {billing.outstanding > 0.005 && (
+                        <span className="text-xs text-slate-500">{formatCurrency(billing.outstanding)} due</span>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             </div>
 
@@ -780,6 +846,55 @@ export default function OrdersPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Billing — read from the linked invoice, which is what the
+                    Payments and Invoices pages use. */}
+                {(() => {
+                  const billing = billingByOrderId.get(selectedOrder.id)
+                  if (!billing) {
+                    return (
+                      <div className="bg-slate-50 rounded-xl p-4 text-sm text-slate-500">
+                        No invoice is linked to this order yet. Create one from the Invoices page and pick this
+                        order under &ldquo;Link to Order&rdquo; so the payments line up.
+                      </div>
+                    )
+                  }
+                  return (
+                    <div className="bg-slate-50 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-sm font-semibold text-slate-700">Billing</h3>
+                        <span className={`badge ${
+                          billing.status === 'paid' ? 'badge-green' :
+                          billing.status === 'partial' ? 'badge-amber' :
+                          billing.status === 'overdue' ? 'badge-red' :
+                          'badge-default'
+                        }`}>
+                          {billing.status}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Invoice:</span>
+                          <span className="font-mono font-medium text-slate-900">{billing.invoiceNumber}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Invoiced:</span>
+                          <span className="font-medium text-slate-900">{formatCurrency(billing.invoiced)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Paid:</span>
+                          <span className="font-medium text-emerald-600">{formatCurrency(billing.paid)}</span>
+                        </div>
+                        <div className="flex justify-between pt-2 border-t border-slate-200">
+                          <span className="text-slate-700 font-medium">Outstanding:</span>
+                          <span className={`font-bold ${billing.outstanding > 0.005 ? 'text-amber-600' : 'text-slate-400'}`}>
+                            {billing.outstanding > 0.005 ? formatCurrency(billing.outstanding) : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })()}
 
                 {/* Shipment Timeline */}
                 <div className="py-4">
